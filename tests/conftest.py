@@ -1,4 +1,4 @@
-"""Install minimal Calibre stubs, then load the real plugin source by file path.
+"""Install minimal Calibre stubs, then load the plugin as a package by file path.
 
 This avoids importing an installed plugin or requiring Calibre. Transport is blocked
 by default; tests explicitly replace it with canned responses. ``plugin_module``
@@ -30,8 +30,8 @@ spec.loader.exec_module(loaded_plugin)
 def no_network(monkeypatch):
     def forbidden(*args, **kwargs):
         raise UnexpectedNetwork('Unexpected network request in offline tests')
-    monkeypatch.setattr(loaded_plugin, 'urlopen', forbidden)
     monkeypatch.setattr(sys.modules['plugin_under_test.transport'], 'urlopen', forbidden)
+    monkeypatch.setattr(sys.modules['plugin_under_test.covers'], 'urlopen', forbidden)
     monkeypatch.setattr(urllib.request, 'urlopen', forbidden)
     monkeypatch.setattr(socket.socket, 'connect', forbidden)
     monkeypatch.setattr(socket.socket, 'connect_ex', forbidden)

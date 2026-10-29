@@ -24,7 +24,7 @@ def test_archive_content_and_import(tmp_path):
                 for p in (ROOT / 'plugin').rglob('*.py')}
     assert names == expected
     assert '__init__.py' in names
-    assert 'matching.py' in names
+    assert 'providers/livelib/parsers.py' in names
     # This is a Python ZIP import with Calibre stubs, not Calibre integration.
     code = '''
 import importlib, sys, types, zipimport

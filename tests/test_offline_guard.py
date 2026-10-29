@@ -9,12 +9,12 @@ from offline_support import UnexpectedNetwork
 @pytest.mark.parametrize('method', ['fetch_url', 'fetch_json'])
 def test_transport_is_blocked(source, method):
     with pytest.raises(UnexpectedNetwork, match='Unexpected network'):
-        getattr(source, method)('https://example.invalid', 1)
+        getattr(source.transport, method)('https://example.invalid', 1)
 
 
 def test_block_survives_plugin_exception_handlers(source, log):
     with pytest.raises(UnexpectedNetwork):
-        source.search_litres(log, 'Книга', ['Автор'], 1)
+        source.litres.search_litres(log, 'Книга', ['Автор'], 1)
 
 
 def test_stdlib_network_is_blocked():
