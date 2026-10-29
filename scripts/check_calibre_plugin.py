@@ -15,6 +15,7 @@ from calibre.utils.logging import Log
 
 def main(path):
     plugin = loader.load(path)(None)
+    assert type(plugin).__module__ == 'calibre_plugins.livelib_metadata'
     log = Log()
     abort = Event()
     calls = []

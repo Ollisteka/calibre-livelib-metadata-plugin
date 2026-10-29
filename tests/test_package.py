@@ -20,9 +20,10 @@ def test_archive_content_and_import(tmp_path):
     archive = builder.build_plugin(tmp_path)
     with ZipFile(archive) as zipped:
         names = set(zipped.namelist())
+        assert zipped.read('plugin-import-name-livelib_metadata.txt') == b''
     expected = {str(p.relative_to(ROOT / 'plugin')).replace('\\', '/')
                 for p in (ROOT / 'plugin').rglob('*.py')}
-    assert names == expected
+    assert names == expected | {'plugin-import-name-livelib_metadata.txt'}
     assert '__init__.py' in names
     assert 'providers/livelib/parsers.py' in names
     # This is a Python ZIP import with Calibre stubs, not Calibre integration.
@@ -40,6 +41,7 @@ assert package.LiveLibMetadata().name == 'LiveLib Metadata'
 for name in sys.argv[2:]:
     importlib.import_module('archive_plugin.' + name)
 '''
-    modules = sorted(name[:-3].replace('/', '.') for name in names if not name.endswith('__init__.py'))
+    modules = sorted(name[:-3].replace('/', '.') for name in names
+                     if name.endswith('.py') and not name.endswith('__init__.py'))
     subprocess.run([sys.executable, '-c', code, str(archive), *modules],
                    cwd=ROOT / 'tests', check=True, capture_output=True, text=True)
