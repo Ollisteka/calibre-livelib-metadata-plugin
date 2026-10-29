@@ -46,43 +46,6 @@ from calibre.ebooks.metadata.sources.base import Source
 STRONG_MATCH_SCORE = 100
 
 
-def clean_html(raw):
-    return re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f]', '', raw or '')
-
-
-def safe_html_fromstring(raw):
-    parser = html.HTMLParser(recover=True, huge_tree=True, encoding='utf-8')
-    return html.fromstring(clean_html(raw), parser=parser)
-
-
-def extract_balanced_json(text, start):
-    start = text.find('{', start)
-    if start < 0:
-        return None
-    depth = 0
-    in_string = False
-    escaped = False
-    for pos in range(start, len(text)):
-        char = text[pos]
-        if in_string:
-            if escaped:
-                escaped = False
-            elif char == '\\':
-                escaped = True
-            elif char == '"':
-                in_string = False
-            continue
-        if char == '"':
-            in_string = True
-        elif char == '{':
-            depth += 1
-        elif char == '}':
-            depth -= 1
-            if depth == 0:
-                return text[start:pos + 1]
-    return None
-
-
 def decode_next_payload(raw):
     cleaned = clean_html(raw)
     chunks = []
@@ -137,25 +100,6 @@ def extract_livelib_json(raw):
     return None
 
 
-def livelib_id_from_url(url):
-    return (url or '').split('/book/', 1)[-1].split('?', 1)[0].split('#', 1)[0]
-
-
-def fantlab_identifier_from_url(url):
-    if not url:
-        return None
-    parsed = urlsplit(url)
-    if parsed.netloc.lower() not in ('api.fantlab.ru', 'fantlab.ru'):
-        return None
-    path = parsed.path.strip('/')
-    return path if FANTLAB_IDENTIFIER_PATTERN.fullmatch(path) else None
-
-
-def livelib_beta_url(url):
-    livelib_id = livelib_id_from_url(url)
-    return BETA_BASE_URL + '/book/' + livelib_id if livelib_id else url
-
-
 def livelib_original_cover_url(url):
     if not url:
         return None
@@ -175,24 +119,6 @@ def livelib_cover_candidates(url):
     if url and url not in urls:
         urls.append(url)
     return urls
-
-
-def compact_page_text(raw):
-    try:
-        root = safe_html_fromstring(raw)
-        text = root.text_content()
-    except Exception:
-        text = raw
-    text = text.replace('\xa0', ' ')
-    return re.sub(r'\s+', ' ', text).strip()
-
-
-def extract_between(text, label, next_labels):
-    labels = '|'.join(re.escape(label) for label in next_labels)
-    match = re.search(re.escape(label) + r'\s*(.*?)\s*(?:' + labels + r')', text)
-    if match:
-        return match.group(1).strip(' ,;')
-    return None
 
 
 def extract_livelib_page_details(raw):
@@ -257,34 +183,6 @@ def extract_livelib_page_details(raw):
     return details
 
 
-def append_edition_details(comments, details, rating_count=None):
-    rows = []
-    labels = [
-        ('isbn', 'ISBN'),
-        ('publisher', 'Издательство'),
-        ('series', 'Серия'),
-        ('year', 'Год издания'),
-        ('language', 'Язык'),
-        ('physical', 'Формат'),
-        ('pages', 'Страниц'),
-        ('cover_type', 'Тип обложки'),
-        ('paper_type', 'Тип бумаги'),
-        ('weight', 'Вес'),
-        ('size', 'Размер'),
-        ('age', 'Возрастные ограничения'),
-    ]
-    for key, label in labels:
-        value = details.get(key)
-        if value:
-            rows.append('%s: %s' % (label, value))
-    if rating_count:
-        rows.append('Оценок LiveLib: %s' % rating_count)
-    if not rows:
-        return comments
-    block = '<p><b>Детали издания LiveLib:</b><br/>%s</p>' % '<br/>'.join(escape(row) for row in rows)
-    return ((comments or '') + block) if comments else block
-
-
 from .constants import BASE_URL
 
 
@@ -330,6 +228,45 @@ from .matching import score_match
 from .matching import title_match_enough
 
 
+from .identifiers import livelib_id_from_url
+
+
+from .identifiers import fantlab_identifier_from_url
+
+
+from .identifiers import livelib_beta_url
+
+
+from .identifiers import get_book_url
+
+
+from .identifiers import id_from_url
+
+
+from .identifiers import get_book_url_name
+
+
+from .html_utils import clean_html
+
+
+from .html_utils import safe_html_fromstring
+
+
+from .html_utils import extract_balanced_json
+
+
+from .html_utils import compact_page_text
+
+
+from .html_utils import extract_between
+
+
+from .transport import Transport
+
+
+from .providers.livelib.formatting import append_edition_details
+
+
 class LiveLibMetadata(Source):
     name = 'LiveLib Metadata'
     description = 'Downloads Russian metadata and covers from LitRes, LiveLib, and FantLab'
@@ -351,27 +288,17 @@ class LiveLibMetadata(Source):
     can_get_multiple_covers = True
 
 
-    def fetch_url(self, url, timeout):
-        headers = {
-            'User-Agent': USER_AGENT,
-            'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.7',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-            'Referer': BASE_URL + '/',
-        }
-        raw = urlopen(Request(url, headers=headers), timeout=timeout).read()
-        return raw.decode('utf-8', 'replace') if isinstance(raw, bytes) else raw
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.transport = Transport()
 
 
-    def fetch_json(self, url, timeout):
-        headers = {
-            'User-Agent': USER_AGENT,
-            'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.7',
-            'Accept': 'application/json,text/plain,*/*',
-            'Accept-Version': '2',
-            'Referer': LITRES_WEB_BASE + '/',
-        }
-        raw = urlopen(Request(url, headers=headers), timeout=timeout).read()
-        return json.loads(raw.decode('utf-8', 'replace') if isinstance(raw, bytes) else raw)
+    def fetch_url(self, *args, **kwargs):
+        return self.transport.fetch_url(*args, **kwargs)
+
+
+    def fetch_json(self, *args, **kwargs):
+        return self.transport.fetch_json(*args, **kwargs)
 
 
     def absolutize_litres_cover(self, cover_url, art_id=None):
@@ -417,32 +344,16 @@ class LiveLibMetadata(Source):
         mi.has_cover = True
 
 
-    def get_book_url(self, identifiers):
-        litres_id = identifiers.get(IDENTIFIER_TYPE_LITRES)
-        if litres_id:
-            return (IDENTIFIER_TYPE_LITRES, litres_id, LITRES_WEB_BASE + '/book/' + litres_id)
-        livelib_id = identifiers.get(IDENTIFIER_TYPE_LIVELIB)
-        if livelib_id:
-            return (IDENTIFIER_TYPE_LIVELIB, livelib_id, BASE_URL + '/book/' + livelib_id)
-        fantlab_id = identifiers.get(IDENTIFIER_TYPE_FANTLAB)
-        if fantlab_id and FANTLAB_IDENTIFIER_PATTERN.fullmatch(as_unicode(fantlab_id)):
-            return (IDENTIFIER_TYPE_FANTLAB, fantlab_id, FANTLAB_BASE_URL + '/' + as_unicode(fantlab_id))
+    def get_book_url(self, *args, **kwargs):
+        return get_book_url(*args, **kwargs)
 
 
     def get_book_url_name(self, idtype, idval, url):
-        names = {
-            IDENTIFIER_TYPE_LITRES: 'Litres',
-            IDENTIFIER_TYPE_LIVELIB: 'LiveLib',
-            IDENTIFIER_TYPE_FANTLAB: 'FantLab',
-        }
-        return names.get(idtype, self.name)
+        return get_book_url_name(idtype, self.name)
 
 
-    def id_from_url(self, url):
-        match = re.search(r'livelib\.ru/book/([^/?#]+)', url or '')
-        if match:
-            return (IDENTIFIER_TYPE_LIVELIB, match.group(1))
-        return None
+    def id_from_url(self, *args, **kwargs):
+        return id_from_url(*args, **kwargs)
 
 
     def identify(self, log, result_queue, abort, title=None, authors=None,

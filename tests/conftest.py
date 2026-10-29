@@ -31,6 +31,7 @@ def no_network(monkeypatch):
     def forbidden(*args, **kwargs):
         raise UnexpectedNetwork('Unexpected network request in offline tests')
     monkeypatch.setattr(loaded_plugin, 'urlopen', forbidden)
+    monkeypatch.setattr(sys.modules['plugin_under_test.transport'], 'urlopen', forbidden)
     monkeypatch.setattr(urllib.request, 'urlopen', forbidden)
     monkeypatch.setattr(socket.socket, 'connect', forbidden)
     monkeypatch.setattr(socket.socket, 'connect_ex', forbidden)
