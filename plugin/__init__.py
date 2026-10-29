@@ -1,6 +1,9 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 
+from types import SimpleNamespace
+
+
 __license__ = 'GPL-3.0-only'
 
 
@@ -267,6 +270,12 @@ from .transport import Transport
 from .providers.livelib.formatting import append_edition_details
 
 
+from .providers.litres import LitresProvider
+
+
+from .providers.fantlab import FantlabProvider
+
+
 class LiveLibMetadata(Source):
     name = 'LiveLib Metadata'
     description = 'Downloads Russian metadata and covers from LitRes, LiveLib, and FantLab'
@@ -291,6 +300,9 @@ class LiveLibMetadata(Source):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.transport = Transport()
+        provider_transport = SimpleNamespace(fetch_url=lambda *a: self.fetch_url(*a), fetch_json=lambda *a: self.fetch_json(*a))
+        self.litres = LitresProvider(provider_transport, self.cache_identifier_to_cover_url)
+        self.fantlab = FantlabProvider(provider_transport, self.cache_identifier_to_cover_url)
 
 
     def fetch_url(self, *args, **kwargs):
@@ -301,18 +313,8 @@ class LiveLibMetadata(Source):
         return self.transport.fetch_json(*args, **kwargs)
 
 
-    def absolutize_litres_cover(self, cover_url, art_id=None):
-        if art_id:
-            return 'https://cdn.litres.ru/pub/c/cover_415/%s' % art_id
-        if not cover_url:
-            return None
-        if cover_url.startswith('//'):
-            return 'https:' + cover_url
-        if cover_url.startswith('/pub/'):
-            return 'https://cdn.litres.ru' + cover_url
-        if cover_url.startswith('/'):
-            return LITRES_WEB_BASE + cover_url
-        return cover_url
+    def absolutize_litres_cover(self, *args, **kwargs):
+        return self.litres.absolutize_litres_cover(*args, **kwargs)
 
 
     def attach_cover_data(self, mi, cover_url, timeout):
@@ -440,123 +442,16 @@ class LiveLibMetadata(Source):
             result_queue.put(mi)
 
 
-    def search_litres(self, log, query_title, query_authors, timeout):
-        queries = []
-        if query_title:
-            queries.append(' '.join([query_title] + list(query_authors or [])).strip())
-            queries.append(query_title)
-        candidates = []
-        seen = set()
-        for query in [q for q in queries if q]:
-            params = [
-                ('q', query), ('limit', '10'), ('offset', '0'),
-                ('is_for_pda', 'false'), ('o', 'popular'),
-                ('show_unavailable', 'false'),
-            ]
-            for type_name in ('text_book', 'audiobook', 'paper_book', 'podcast', 'podcast_episode', 'webtoon'):
-                params.append(('types', type_name))
-            url = LITRES_API_BASE + '/search?' + urlencode(params)
-            log.info('LitRes search: ' + url)
-            try:
-                payload = self.fetch_json(url, timeout).get('payload') or {}
-            except Exception as err:
-                log.exception('LitRes search failed: %s' % as_unicode(err))
-                continue
-            for row in payload.get('data') or []:
-                item = row.get('instance') or row
-                art_id = item.get('id')
-                if not art_id or art_id in seen:
-                    continue
-                persons = item.get('persons') or []
-                authors = [p.get('full_name') for p in persons if p.get('role') == 'author' and p.get('full_name')]
-                author_text = ', '.join(authors or [p.get('full_name') for p in persons if p.get('full_name')][:2])
-                if query_authors and authors:
-                    query_author_tokens = set(norm(' '.join(query_authors)).split())
-                    result_author_tokens = set(norm(' '.join(authors)).split())
-                    if not (query_author_tokens & result_author_tokens):
-                        continue
-                if not title_match_enough(query_title, item.get('title') or ''):
-                    continue
-                score = score_match(query_title, query_authors, item.get('title') or '', author_text)
-                item_url = item.get('url') or ''
-                if item.get('art_type') in (4, 10) or '/audiobook/' in item_url or '/podcast/' in item_url:
-                    score -= 20
-                if score < 55:
-                    continue
-                seen.add(art_id)
-                cover_url = self.absolutize_litres_cover(item.get('cover_url'), art_id)
-                candidates.append({
-                    'source': 'litres',
-                    'score': score + 5,
-                    'id': str(art_id),
-                    'title': item.get('title') or '',
-                    'authors': authors or (author_text.split(', ') if author_text else ['Unknown']),
-                    'url': item.get('url'),
-                    'cover_url': cover_url,
-                    'raw': item,
-                })
-        candidates.sort(key=lambda row: row['score'], reverse=True)
-        return candidates
+    def search_litres(self, *args, **kwargs):
+        return self.litres.search_litres(*args, **kwargs)
 
 
-    def metadata_from_litres_candidate(self, candidate, item=None):
-        item = item or candidate.get('raw') or {}
-        title = item.get('title') or candidate.get('title') or ''
-        persons = item.get('persons') or []
-        authors = [p.get('full_name') for p in persons if p.get('role') == 'author' and p.get('full_name')]
-        if not authors:
-            authors = candidate.get('authors') or ['Unknown']
-        mi = Metadata(title, authors)
-        if (item.get('language_code') or '').lower() == 'ru':
-            mi.language = 'rus'
-        litres_id = str(item.get('id') or candidate.get('id') or '')
-        if litres_id:
-            mi.set_identifier(IDENTIFIER_TYPE_LITRES, litres_id)
-        publishers = [p.get('full_name') for p in persons if p.get('role') == 'publisher' and p.get('full_name')]
-        if publishers:
-            mi.publisher = publishers[0]
-        description = item.get('annotation') or item.get('description')
-        if not description:
-            meta = item.get('meta_tags') or {}
-            root_meta = meta.get('root') if isinstance(meta, dict) else None
-            if isinstance(root_meta, dict):
-                description = root_meta.get('open_graph_description') or root_meta.get('description')
-        if description:
-            mi.comments = '<p>%s</p>' % as_unicode(description).strip()
-        genres = item.get('genres') or item.get('genres_hierarchy') or []
-        tags = []
-        for genre in genres:
-            if isinstance(genre, dict):
-                name = genre.get('title') or genre.get('name')
-                if name:
-                    tags.append(name)
-            elif genre:
-                tags.append(as_unicode(genre))
-        if tags:
-            mi.tags = tags[:8]
-        rating = item.get('rating') or {}
-        try:
-            value = rating.get('rated_avg') if isinstance(rating, dict) else rating
-            if value:
-                mi.rating = float(value) * 2 if float(value) <= 5 else float(value)
-        except Exception:
-            pass
-        cover_url = self.absolutize_litres_cover(item.get('cover_url') or candidate.get('cover_url'), litres_id)
-        if cover_url and litres_id:
-            self.cache_identifier_to_cover_url(litres_id, cover_url)
-            mi.has_cover = True
-        return mi
+    def metadata_from_litres_candidate(self, *args, **kwargs):
+        return self.litres.metadata_from_litres_candidate(*args, **kwargs)
 
 
-    def fetch_litres_book(self, log, candidate, timeout):
-        art_id = candidate.get('id')
-        if not art_id:
-            return self.metadata_from_litres_candidate(candidate)
-        url = LITRES_API_BASE + '/arts/' + quote(str(art_id))
-        log.info('LitRes detail: ' + url)
-        payload = self.fetch_json(url, timeout).get('payload') or {}
-        item = payload.get('data') or payload
-        return self.metadata_from_litres_candidate(candidate, item=item)
+    def fetch_litres_book(self, *args, **kwargs):
+        return self.litres.fetch_litres_book(*args, **kwargs)
 
 
     def parse_beta_search_payload(self, raw, query_title, query_authors):
@@ -711,48 +606,8 @@ class LiveLibMetadata(Source):
         return candidates
 
 
-    def search_fantlab(self, log, query_title, query_authors, timeout):
-        query = ' '.join([query_title or ''] + list(query_authors or [])).strip()
-        if not query:
-            return []
-        url = FANTLAB_API_BASE_URL + '/search-txt?q=' + quote(query)
-        log.info('FantLab fallback search: ' + url)
-        try:
-            raw = self.fetch_url(url, timeout)
-            payload = json.loads(raw)
-        except Exception as err:
-            log.exception('FantLab search failed: %s' % as_unicode(err))
-            return []
-
-        candidates = []
-        for item in payload.get('works') or []:
-            fantlab_identifier = fantlab_identifier_from_url(item.get('url'))
-            title = item.get('name') or ''
-            author_names = [
-                a.get('name') for a in ((item.get('creators') or {}).get('authors') or [])
-                if a.get('name')
-            ]
-            author = ', '.join(author_names)
-            score = score_match(query_title, query_authors, title, author)
-            if score < 50:
-                continue
-            if item.get('type') != 'work':
-                score -= 10
-            candidates.append({
-                'source': 'fantlab',
-                'score': score,
-                'title': title,
-                'authors': author_names or ['Unknown'],
-                'id': item.get('id'),
-                'identifier': fantlab_identifier,
-                'url': FANTLAB_BASE_URL + '/' + fantlab_identifier if fantlab_identifier else None,
-                'comments': item.get('description') or '',
-                'rating': (item.get('stat') or {}).get('rating'),
-                'cover_url': FANTLAB_API_BASE_URL + item.get('image') if item.get('image') else None,
-                'tags': [item.get('name_type')] if item.get('name_type') else [],
-            })
-        candidates.sort(key=lambda row: row['score'], reverse=True)
-        return candidates
+    def search_fantlab(self, *args, **kwargs):
+        return self.fantlab.search_fantlab(*args, **kwargs)
 
 
     def metadata_from_search_candidate(self, candidate):
@@ -779,27 +634,8 @@ class LiveLibMetadata(Source):
         return mi
 
 
-    def metadata_from_fantlab_candidate(self, candidate):
-        mi = Metadata(candidate.get('title') or '', candidate.get('authors') or ['Unknown'])
-        mi.language = 'rus'
-        fantlab_id = candidate.get('identifier') or candidate.get('id')
-        if fantlab_id:
-            fantlab_id = as_unicode(fantlab_id)
-            mi.set_identifier(IDENTIFIER_TYPE_FANTLAB, fantlab_id)
-        if candidate.get('comments'):
-            mi.comments = '<p>%s</p>' % candidate['comments'].replace('\n', '<br/>')
-        if candidate.get('tags'):
-            mi.tags = candidate['tags']
-        try:
-            if candidate.get('rating'):
-                mi.rating = float(candidate['rating'])
-        except Exception:
-            pass
-        cover_url = candidate.get('cover_url')
-        if cover_url and fantlab_id:
-            self.cache_identifier_to_cover_url(fantlab_id, cover_url)
-            mi.has_cover = True
-        return mi
+    def metadata_from_fantlab_candidate(self, *args, **kwargs):
+        return self.fantlab.metadata_from_fantlab_candidate(*args, **kwargs)
 
 
     def fetch_book(self, log, url, timeout):

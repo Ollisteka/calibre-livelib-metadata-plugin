@@ -1,3 +1,4 @@
+from plugin_under_test.providers import litres
 import json
 from unittest.mock import Mock
 from urllib.parse import parse_qs, urlsplit
@@ -66,7 +67,7 @@ def test_litres_audio_penalty_precedes_source_bonus(source, monkeypatch, log, au
 def test_litres_score_filter_accepts_55_and_above(
         source, plugin_module, monkeypatch, log, base_score, expected):
     # Isolate the acceptance boundary from title/author scoring (tested separately).
-    monkeypatch.setattr(plugin_module, 'score_match', Mock(return_value=base_score))
+    monkeypatch.setattr(litres, 'score_match', Mock(return_value=base_score))
     monkeypatch.setattr(source, 'fetch_json', Mock(return_value={
         'payload': {'data': [litres_item(1)]}}))
     found = source.search_litres(log, 'Книга', ['Автор'], 7)
