@@ -1,3 +1,4 @@
+from plugin_under_test.providers.livelib import provider
 from plugin_under_test import transport
 
 import json
@@ -51,7 +52,7 @@ def test_full_livelib_detail(source, plugin_module, monkeypatch, log):
     fetch = Mock(return_value=raw)
     isbn = Mock(return_value='validated-isbn')
     monkeypatch.setattr(source, 'fetch_url', fetch)
-    monkeypatch.setattr(plugin_module, 'check_isbn', isbn)
+    monkeypatch.setattr(provider, 'check_isbn', isbn)
     mi = source.fetch_book(log, 'https://www.livelib.ru/book/1', 7)
     fetch.assert_called_once_with('https://beta.livelib.ru/book/1', 7)
     isbn.assert_called_once_with('raw-isbn')
