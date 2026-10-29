@@ -43,6 +43,20 @@ class LiveLibProvider:
             self.cache_cover(livelib_id, cover_url)
         return mi
 
+    def complete_candidate(self, log, candidate, timeout):
+        """Complete a search candidate; preserve the search preview preference."""
+        try:
+            mi = self.fetch_book(log, candidate['url'], timeout)
+        except Exception as err:
+            log.exception('LiveLib detail failed for %s: %s' % (candidate['url'], as_unicode(err)))
+            mi = self.metadata_from_search_candidate(candidate)
+        if mi is not None and candidate.get('cover_url'):
+            livelib_id = (mi.identifiers or {}).get(IDENTIFIER_TYPE_LIVELIB) or livelib_id_from_url(candidate.get('url'))
+            if livelib_id:
+                self.cache_cover(livelib_id, candidate['cover_url'])
+                mi.has_cover = True
+        return mi
+
     def fetch_book(self, log, url, timeout):
         url = livelib_beta_url(url)
         raw = self.transport.fetch_url(url, timeout)
