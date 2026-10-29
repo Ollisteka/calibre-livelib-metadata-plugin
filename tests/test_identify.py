@@ -1,3 +1,5 @@
+from plugin_under_test.providers.livelib import provider
+
 from unittest.mock import Mock
 
 import pytest
@@ -27,23 +29,22 @@ def searches(source, monkeypatch):
     """Replace both API searches, LiveLib transport and its HTML parser.
 
     All searches start empty; tests supply candidates or failures explicitly.
-    The cover helper raises if identify attempts to download image bytes.
     Detail methods are left real unless a scenario replaces them separately.
     """
     doubles = {}
     for name, value in [('search_litres', []), ('search_fantlab', []),
                         ('fetch_url', 'synthetic html'), ('parse_search_results', [])]:
         doubles[name] = Mock(return_value=value)
-        monkeypatch.setattr(source, name, doubles[name])
-    # Covers must never be fetched during identify, including through this helper.
-    monkeypatch.setattr(source, 'attach_cover_data', Mock(side_effect=AssertionError('Cover bytes during identify')))
+        owner = {'search_litres': source.litres, 'search_fantlab': source.fantlab,
+                 'fetch_url': source.transport, 'parse_search_results': provider}[name]
+        monkeypatch.setattr(owner, name, doubles[name])
     return doubles
 
 
 def test_direct_litres_id_fetches_details_without_search(source, monkeypatch, searches, log, results, abort):
     fetch = Mock(return_value={'payload': {'data': {
         'id': '123', 'title': 'Подробное', 'language_code': 'ru'}}})
-    monkeypatch.setattr(source, 'fetch_json', fetch)
+    monkeypatch.setattr(source.transport, 'fetch_json', fetch)
     source.identify(log, results, abort, title='Книга', authors=['Автор'], identifiers={'litres': '123'})
     found = drain(results)
     assert len(found) == 1
@@ -58,7 +59,7 @@ def test_direct_litres_id_fetches_details_without_search(source, monkeypatch, se
 def test_direct_livelib_id_detail_error_returns_query_metadata_without_search(
         source, monkeypatch, searches, log, results, abort):
     fetch = Mock(side_effect=OSError('detail unavailable'))
-    monkeypatch.setattr(source, 'fetch_book', fetch)
+    monkeypatch.setattr(source.livelib, 'fetch_book', fetch)
     source.identify(log, results, abort, title='Книга', authors=['Автор'], identifiers={'livelib': '123'})
     found = drain(results)
     assert len(found) == 1
@@ -72,9 +73,9 @@ def test_direct_livelib_id_detail_error_returns_query_metadata_without_search(
 
 
 def test_direct_litres_priority(source, monkeypatch, searches, log, results, abort):
-    monkeypatch.setattr(source, 'fetch_litres_book', Mock(side_effect=OSError('no details')))
+    monkeypatch.setattr(source.litres, 'fetch_litres_book', Mock(side_effect=OSError('no details')))
     livelib_details = Mock()
-    monkeypatch.setattr(source, 'fetch_book', livelib_details)
+    monkeypatch.setattr(source.livelib, 'fetch_book', livelib_details)
     source.identify(log, results, abort, title='Книга', identifiers={'litres': '1', 'livelib': '2'})
     assert [mi.identifiers for mi in drain(results)] == [{'litres': '1'}]
     livelib_details.assert_not_called()
@@ -93,8 +94,8 @@ def test_legacy_threshold(source, monkeypatch, searches, log, results, abort, sc
     else:
         searches['parse_search_results'].side_effect = lambda raw, *args: [row] if raw == 'beta' else []
     searches['fetch_url'].side_effect = lambda url, timeout: 'beta' if '/search?' in url else 'legacy'
-    monkeypatch.setattr(source, 'fetch_litres_book', Mock(side_effect=OSError('no details')))
-    monkeypatch.setattr(source, 'fetch_book', Mock(side_effect=OSError('no details')))
+    monkeypatch.setattr(source.litres, 'fetch_litres_book', Mock(side_effect=OSError('no details')))
+    monkeypatch.setattr(source.livelib, 'fetch_book', Mock(side_effect=OSError('no details')))
     source.identify(log, results, abort, title='Книга', authors=['Автор'])
     urls = [call.args[0] for call in searches['fetch_url'].call_args_list]
     assert len(urls) == (2 if legacy else 1)
@@ -111,11 +112,11 @@ def test_merge_sources_orders_by_score_and_limits_to_six(source, monkeypatch, se
     searches['parse_search_results'].return_value = livelib_candidates
     searches['search_fantlab'].return_value = [candidate('fantlab', i, score) for i, score in [(5, 140), (6, 130), (7, 70)]]
     # Supply successful detail results; error fallback is covered separately below.
-    monkeypatch.setattr(source, 'fetch_litres_book',
-                        lambda log, row, timeout: source.metadata_from_litres_candidate(row))
+    monkeypatch.setattr(source.litres, 'fetch_litres_book',
+                        lambda log, row, timeout: source.litres.metadata_from_litres_candidate(row))
     livelib_by_url = {row['url']: row for row in livelib_candidates}
-    monkeypatch.setattr(source, 'fetch_book', lambda log, url, timeout:
-                        source.metadata_from_search_candidate(livelib_by_url[url]))
+    monkeypatch.setattr(source.livelib, 'fetch_book', lambda log, url, timeout:
+                        source.livelib.metadata_from_search_candidate(livelib_by_url[url]))
     source.identify(log, results, abort, title='Книга', authors=['Автор'])
     found = drain(results)
     assert [mi.title for mi in found] == ['Книга 3', 'Книга 1', 'Книга 5', 'Книга 6', 'Книга 4', 'Книга 2']
@@ -133,7 +134,7 @@ def test_detail_error_preserves_candidate_metadata_and_caches_cover(
     searches[search].return_value = [row]
     detail_method = 'fetch_litres_book' if kind == 'litres' else 'fetch_book'
     details = Mock(side_effect=OSError('no details'))
-    monkeypatch.setattr(source, detail_method, details)
+    monkeypatch.setattr(source.litres if kind == 'litres' else source.livelib, detail_method, details)
     source.identify(log, results, abort, title='Книга', authors=['Автор'], timeout=7)
     found = drain(results)
     assert len(found) == 1
@@ -147,7 +148,7 @@ def test_detail_error_preserves_candidate_metadata_and_caches_cover(
 
 def test_missing_detail_is_skipped(source, monkeypatch, searches, log, results, abort):
     searches['parse_search_results'].return_value = [candidate('livelib', 1)]
-    monkeypatch.setattr(source, 'fetch_book', Mock(return_value=None))
+    monkeypatch.setattr(source.livelib, 'fetch_book', Mock(return_value=None))
     source.identify(log, results, abort, title='Книга')
     assert results.empty()
 
@@ -169,7 +170,7 @@ def test_empty_identify(source, searches, log, results, abort):
 def test_cancelled_direct_lookup(source, monkeypatch, searches, log, results, abort):
     abort.set()
     fetch = Mock()
-    monkeypatch.setattr(source, 'fetch_litres_book', fetch)
+    monkeypatch.setattr(source.litres, 'fetch_litres_book', fetch)
     source.identify(log, results, abort, identifiers={'litres': '1'})
     fetch.assert_not_called()
     assert results.empty()
@@ -181,7 +182,7 @@ def test_cancellation_after_search_before_details(source, monkeypatch, searches,
         return [candidate('litres', 1)]
     searches['search_litres'].side_effect = search
     fetch = Mock()
-    monkeypatch.setattr(source, 'fetch_litres_book', fetch)
+    monkeypatch.setattr(source.litres, 'fetch_litres_book', fetch)
     source.identify(log, results, abort, title='Книга')
     fetch.assert_not_called()
     assert results.empty()

@@ -46,9 +46,6 @@ from calibre.ebooks.metadata.book.base import Metadata
 from calibre.ebooks.metadata.sources.base import Source
 
 
-STRONG_MATCH_SCORE = 100
-
-
 def livelib_original_cover_url(url):
     if not url:
         return None
@@ -181,6 +178,12 @@ from .providers.livelib.parsers import parse_search_results
 from .providers.livelib.provider import LiveLibProvider
 
 
+from .identify import STRONG_MATCH_SCORE
+
+
+from .identify import identify
+
+
 class LiveLibMetadata(Source):
     name = 'LiveLib Metadata'
     description = 'Downloads Russian metadata and covers from LitRes, LiveLib, and FantLab'
@@ -264,88 +267,8 @@ class LiveLibMetadata(Source):
         return id_from_url(*args, **kwargs)
 
 
-    def identify(self, log, result_queue, abort, title=None, authors=None,
-                 identifiers=None, timeout=30):
-        identifiers = identifiers or {}
-        direct_id = identifiers.get(IDENTIFIER_TYPE_LIVELIB)
-        candidates = []
-
-        litres_id = identifiers.get(IDENTIFIER_TYPE_LITRES)
-        if litres_id:
-            candidates.append({
-                'source': 'litres',
-                'score': 1000,
-                'id': litres_id,
-                'title': title or '',
-                'authors': authors or [],
-            })
-        elif direct_id:
-            candidates.append({
-                'source': 'livelib',
-                'score': 1000,
-                'url': BETA_BASE_URL + '/book/' + direct_id,
-                'title': title or '',
-                'author': (authors or [''])[0],
-            })
-        else:
-            query = ' '.join([title or ''] + list(authors or [])).strip()
-            if not query:
-                return
-            candidates = self.search_litres(log, title, authors, timeout)
-            # Always run the fast beta search; only fall back to the slow legacy
-            # livelib.ru/find search when nothing strong has been found yet.
-            search_urls = [BETA_BASE_URL + '/search?q=' + quote(query)]
-            for url in search_urls:
-                log.info('LiveLib search: ' + url)
-                try:
-                    raw = self.fetch_url(url, timeout)
-                except Exception as err:
-                    log.exception('LiveLib search failed: %s' % as_unicode(err))
-                    raw = None
-                if raw:
-                    candidates.extend(self.parse_search_results(raw, title, authors))
-            if not any(c['score'] >= STRONG_MATCH_SCORE for c in candidates):
-                legacy_url = BASE_URL + '/find/' + quote(query)
-                log.info('LiveLib search: ' + legacy_url)
-                try:
-                    raw = self.fetch_url(legacy_url, timeout)
-                except Exception as err:
-                    log.exception('LiveLib search failed: %s' % as_unicode(err))
-                    raw = None
-                if raw:
-                    candidates.extend(self.parse_search_results(raw, title, authors))
-            candidates.extend(self.search_fantlab(log, title, authors, timeout))
-            candidates.sort(key=lambda row: row['score'], reverse=True)
-
-        for candidate in candidates[:6]:
-            if abort.is_set():
-                return
-            if candidate.get('source') == 'litres':
-                try:
-                    mi = self.fetch_litres_book(log, candidate, timeout)
-                except Exception as err:
-                    log.exception('LitRes detail failed for %s: %s' % (candidate.get('id'), as_unicode(err)))
-                    mi = self.metadata_from_litres_candidate(candidate)
-            elif candidate.get('source') == 'fantlab':
-                mi = self.metadata_from_fantlab_candidate(candidate)
-            else:
-                try:
-                    mi = self.fetch_book(log, candidate['url'], timeout)
-                except Exception as err:
-                    log.exception('LiveLib detail failed for %s: %s' % (candidate['url'], as_unicode(err)))
-                    mi = self.metadata_from_search_candidate(candidate)
-                if mi is not None and candidate.get('cover_url'):
-                    livelib_id = (mi.identifiers or {}).get(IDENTIFIER_TYPE_LIVELIB) or livelib_id_from_url(candidate.get('url'))
-                    if livelib_id:
-                        self.cache_identifier_to_cover_url(livelib_id, candidate['cover_url'])
-                        mi.has_cover = True
-            if mi is None:
-                continue
-            # Cover bytes are intentionally NOT downloaded here. Calibre fetches
-            # covers separately via download_cover() using the URLs cached above,
-            # so downloading them during identify would only duplicate the work.
-            mi.source_relevance = -candidate['score']
-            result_queue.put(mi)
+    def identify(self, log, result_queue, abort, title=None, authors=None, identifiers=None, timeout=30):
+        return identify(self.litres, self.livelib, self.fantlab, self.cache_identifier_to_cover_url, log, result_queue, abort, title, authors, identifiers, timeout)
 
 
     def search_litres(self, *args, **kwargs):
