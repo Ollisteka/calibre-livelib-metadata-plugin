@@ -107,6 +107,26 @@ The build writes the installable archive to:
 dist/LiveLib.Metadata.zip
 ```
 
+## Running tests
+
+Use Python 3.11. Tests run without Calibre or network access; testing in Calibre is a separate manual step.
+
+Windows (PowerShell):
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest
+```
+
+Linux:
+
+```bash
+python3.11 -m venv .venv
+.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m pytest
+```
+
 ## Releasing
 
 Releases are automated. Pushing a tag like `v0.3.3` triggers the GitHub Actions workflow
