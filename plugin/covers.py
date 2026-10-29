@@ -1,5 +1,3 @@
-from urllib.request import Request, urlopen
-from .constants import USER_AGENT
 from .constants import BASE_URL
 from .constants import BETA_BASE_URL
 from .constants import IDENTIFIER_TYPE_FANTLAB
@@ -113,32 +111,3 @@ def expand_cover_urls(urls):
                 seen.add(candidate)
                 candidates.append(candidate)
     return candidates
-
-
-def attach_cover_data(mi, cover_url, timeout):
-    if not cover_url:
-        return
-    headers = {
-        'User-Agent': USER_AGENT,
-        'Accept': 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
-        'Referer': BASE_URL + '/',
-    }
-    raw = None
-    downloaded_url = cover_url
-    for candidate_url in livelib_cover_candidates(cover_url):
-        try:
-            raw = urlopen(Request(candidate_url, headers=headers), timeout=timeout).read()
-            downloaded_url = candidate_url
-            break
-        except Exception:
-            continue
-    if raw is None:
-        raw = urlopen(Request(cover_url, headers=headers), timeout=timeout).read()
-    fmt = 'jpeg'
-    lowered = downloaded_url.lower()
-    if lowered.endswith('.png'):
-        fmt = 'png'
-    elif lowered.endswith('.webp'):
-        fmt = 'webp'
-    mi.cover_data = (fmt, raw)
-    mi.has_cover = True
