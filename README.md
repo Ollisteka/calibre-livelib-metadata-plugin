@@ -107,6 +107,46 @@ The build writes the installable archive to:
 dist/LiveLib.Metadata.zip
 ```
 
+## Running tests
+
+The offline unit suite loads `plugin/__init__.py` with real `lxml` and small Calibre
+API stubs. Calibre, personal settings, and a Calibre library are not required.
+Use Python 3.11 (the CI version); the suite has also been verified locally on
+Windows with Python 3.12.14, pytest 8.4.2, and lxml 6.0.2.
+
+Windows (PowerShell):
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
+.\.venv\Scripts\python.exe -m pytest
+```
+
+Linux:
+
+```bash
+python3.11 -m venv .venv
+.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/python -m pytest
+```
+
+With the environment activated, the command is `python -m pytest`. Test dependencies
+are separate from the installable plugin. Unexpected `urlopen` and socket calls
+fail immediately, including inside the plugin's error handlers. Each test gets a
+fresh plugin instance, queue, cancellation event, and temporary dependency patches.
+
+Tests cover matching, identifiers, metadata, covers, search coordination, and small
+synthetic HTML examples. They do not confirm current website markup, Next.js streaming
+payloads, live API compatibility, or Calibre's own behavior (including ISBN validation).
+Manual testing in Calibre remains necessary. GitHub Actions runs the suite on Ubuntu
+with Python 3.11 for pull requests targeting `main` and pushes to `main`, separately
+from the release workflow. Pytest exits with an error if no tests are collected.
+
+Manual runs are enabled with `workflow_dispatch`. Once this workflow is present
+on the default branch (`main`), open **Actions → Tests → Run workflow** and select
+the branch to test. A pull request is not required. The selected branch must also
+contain the workflow and tests. See [GitHub's manual run instructions](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow).
+
 ## Releasing
 
 Releases are automated. Pushing a tag like `v0.3.3` triggers the GitHub Actions workflow
