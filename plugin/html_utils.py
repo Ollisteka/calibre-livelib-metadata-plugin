@@ -8,7 +8,9 @@ def clean_html(raw):
 
 def safe_html_fromstring(raw):
     parser = html.HTMLParser(recover=True, huge_tree=True, encoding='utf-8')
-    return html.fromstring(clean_html(raw), parser=parser)
+    # Match the declared parser encoding explicitly. Passing a Unicode string
+    # can fail on non-BMP characters in Calibre's bundled libxml2 on Windows.
+    return html.fromstring(clean_html(raw).encode('utf-8'), parser=parser)
 
 
 def extract_balanced_json(text, start):
