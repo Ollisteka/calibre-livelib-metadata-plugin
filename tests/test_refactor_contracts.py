@@ -1,3 +1,4 @@
+from plugin_under_test import transport
 
 import json
 from unittest.mock import Mock
@@ -12,7 +13,7 @@ def test_transport_contract(source, plugin_module, monkeypatch, as_bytes, method
     response = Mock()
     response.read.return_value = body.encode() if as_bytes else body
     opener = Mock(return_value=response)
-    monkeypatch.setattr(plugin_module, 'urlopen', opener)
+    monkeypatch.setattr(transport, 'urlopen', opener)
     result = getattr(source, method)('https://example.invalid/data', 7)
     assert result == (json.loads(body) if method == 'fetch_json' else body)
     request = opener.call_args.args[0]
