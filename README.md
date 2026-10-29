@@ -101,6 +101,15 @@ under **«Детали издания LiveLib»**.
 ./scripts/build-plugin.sh
 ```
 
+On Windows, run from the project root in PowerShell with Python installed:
+
+```powershell
+py scripts/build_plugin.py
+```
+
+If you use the project's virtual environment, run `.\.venv\Scripts\python.exe scripts/build_plugin.py` instead. 
+No additional packages are required to build the ZIP.
+
 The build writes the installable archive to:
 
 ```text
