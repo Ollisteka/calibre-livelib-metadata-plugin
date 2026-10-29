@@ -6,7 +6,7 @@ import pytest
 from offline_support import UnexpectedNetwork
 
 
-@pytest.mark.parametrize('method', ['fetch_url', 'fetch_json'])
+@pytest.mark.parametrize('method', ['fetch_livelib_text', 'fetch_litres_json'])
 def test_transport_is_blocked(source, method):
     with pytest.raises(UnexpectedNetwork, match='Unexpected network'):
         getattr(source.transport, method)('https://example.invalid', 1)

@@ -15,7 +15,7 @@ ORIGINAL = 'https://s1.livelib.ru/boocover/123/o/ab/cover.jpeg'
     (ORIGINAL, None, [ORIGINAL]), ('https://elsewhere/cover.png', None, ['https://elsewhere/cover.png']),
     ('', None, []), (None, None, []),
 ], ids=['preview-expanded', 'original-unchanged', 'other-source-unchanged', 'empty', 'missing'])
-def test_cover_variants(plugin_module, url, original, candidates):
+def test_cover_variants(url, original, candidates):
     assert covers.livelib_original_cover_url(url) == original
     assert covers.livelib_cover_candidates(url) == candidates
 
@@ -48,7 +48,7 @@ def test_cache_priority(source):
     assert source.get_cached_cover_url({'livelib': '2', 'fantlab': 'work3'}) == 'https://cover/2'
 
 
-def test_collect_covers(source, plugin_module, monkeypatch, log, abort):
+def test_collect_covers(source, monkeypatch, log, abort):
     source.cache_identifier_to_cover_url('initial', 'https://cover/cached')
     def identify(log, queue, abort, **kwargs):
         for identifier, url in [('1', 'https://cover/one'), ('2', 'https://cover/cached'),

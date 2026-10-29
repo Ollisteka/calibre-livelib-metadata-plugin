@@ -48,7 +48,7 @@ class LitresProvider:
             url = LITRES_API_BASE + '/search?' + urlencode(params)
             log.info('LitRes search: ' + url)
             try:
-                payload = self.transport.fetch_json(url, timeout).get('payload') or {}
+                payload = self.transport.fetch_litres_json(url, timeout).get('payload') or {}
             except Exception as err:
                 log.exception('LitRes search failed: %s' % as_unicode(err))
                 continue
@@ -142,6 +142,6 @@ class LitresProvider:
             return self.metadata_from_litres_candidate(candidate)
         url = LITRES_API_BASE + '/arts/' + quote(str(art_id))
         log.info('LitRes detail: ' + url)
-        payload = self.transport.fetch_json(url, timeout).get('payload') or {}
+        payload = self.transport.fetch_litres_json(url, timeout).get('payload') or {}
         item = payload.get('data') or payload
         return self.metadata_from_litres_candidate(candidate, item=item)

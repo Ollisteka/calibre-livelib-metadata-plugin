@@ -59,7 +59,7 @@ class LiveLibProvider:
 
     def fetch_book(self, log, url, timeout):
         url = livelib_beta_url(url)
-        raw = self.transport.fetch_url(url, timeout)
+        raw = self.transport.fetch_livelib_text(url, timeout)
         return self.metadata_from_page(raw, url)
 
     def metadata_from_page(self, raw, url):
@@ -132,7 +132,7 @@ class LiveLibProvider:
 
     def search_page(self, url, title, authors, timeout, log=None):
         try:
-            raw = self.transport.fetch_url(url, timeout)
+            raw = self.transport.fetch_livelib_text(url, timeout)
         except Exception as err:
             if log is None:
                 raise

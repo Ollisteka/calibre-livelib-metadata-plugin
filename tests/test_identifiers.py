@@ -7,7 +7,7 @@ import pytest
     'https://www.livelib.ru/book/123',
     'https://beta.livelib.ru/book/123?x=1#details', '/book/123#details',
 ], ids=['main-site', 'beta-query-and-fragment', 'relative-with-fragment'])
-def test_livelib_urls(plugin_module, source, url):
+def test_livelib_urls(source, url):
     assert identifiers.livelib_id_from_url(url) == '123'
     assert identifiers.livelib_beta_url(url) == 'https://beta.livelib.ru/book/123'
 
@@ -20,7 +20,7 @@ def test_livelib_urls(plugin_module, source, url):
     ('', None), (None, None),
 ], ids=['work-query-and-fragment', 'api-edition', 'foreign-domain', 'numeric-only',
         'missing-number', 'nested-path', 'empty', 'missing'])
-def test_fantlab_identifier(plugin_module, url, expected):
+def test_fantlab_identifier(url, expected):
     assert identifiers.fantlab_identifier_from_url(url) == expected
 
 

@@ -8,7 +8,7 @@ import pytest
                                            (5, 5), (6, 3), (9, 4.5)],
                          ids=['missing', 'invalid', 'decimal-comma', 'five-unchanged',
                               'six-halved', 'nine-halved'])
-def test_source_rating(plugin_module, value, expected):
+def test_source_rating(value, expected):
     assert parsers.source_rating(value) == expected
 
 
@@ -16,11 +16,11 @@ def test_source_rating(plugin_module, value, expected):
     pytest.param('<p>Аннотация</p>', id='existing-annotation'),
     pytest.param(None, id='no-annotation'),
 ])
-def test_empty_edition_details_preserve_comments(plugin_module, comments):
+def test_empty_edition_details_preserve_comments(comments):
     assert formatting.append_edition_details(comments, {}) == comments
 
 
-def test_edition_details_escape_values_and_append_to_annotation(plugin_module):
+def test_edition_details_escape_values_and_append_to_annotation():
     comments = '<p>Аннотация</p>'
     assert formatting.append_edition_details(comments, {'publisher': '<Издатель & Co>', 'pages': '320'}) == (
         comments + '<p><b>Детали издания LiveLib:</b><br/>'
@@ -32,7 +32,7 @@ def test_edition_details_escape_values_and_append_to_annotation(plugin_module):
                  '<br/>Оценок LiveLib: 12</p>', id='positive-count-shown'),
     pytest.param(0, '<p><b>Детали издания LiveLib:</b><br/>Год издания: 2020</p>', id='zero-count-omitted'),
 ])
-def test_edition_details_rating_count(plugin_module, rating_count, expected):
+def test_edition_details_rating_count(rating_count, expected):
     assert formatting.append_edition_details(None, {'year': '2020'}, rating_count) == expected
 
 

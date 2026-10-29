@@ -33,10 +33,10 @@ def searches(source, monkeypatch):
     """
     doubles = {}
     for name, value in [('search_litres', []), ('search_fantlab', []),
-                        ('fetch_url', 'synthetic html'), ('parse_search_results', [])]:
+                        ('fetch_livelib_text', 'synthetic html'), ('parse_search_results', [])]:
         doubles[name] = Mock(return_value=value)
         owner = {'search_litres': source.litres, 'search_fantlab': source.fantlab,
-                 'fetch_url': source.transport, 'parse_search_results': provider}[name]
+                 'fetch_livelib_text': source.transport, 'parse_search_results': provider}[name]
         monkeypatch.setattr(owner, name, doubles[name])
     return doubles
 
@@ -44,7 +44,7 @@ def searches(source, monkeypatch):
 def test_direct_litres_id_fetches_details_without_search(source, monkeypatch, searches, log, results, abort):
     fetch = Mock(return_value={'payload': {'data': {
         'id': '123', 'title': 'Подробное', 'language_code': 'ru'}}})
-    monkeypatch.setattr(source.transport, 'fetch_json', fetch)
+    monkeypatch.setattr(source.transport, 'fetch_litres_json', fetch)
     source.identify(log, results, abort, title='Книга', authors=['Автор'], identifiers={'litres': '123'})
     found = drain(results)
     assert len(found) == 1
@@ -93,11 +93,11 @@ def test_legacy_threshold(source, monkeypatch, searches, log, results, abort, sc
         searches['search_litres'].return_value = [row]
     else:
         searches['parse_search_results'].side_effect = lambda raw, *args: [row] if raw == 'beta' else []
-    searches['fetch_url'].side_effect = lambda url, timeout: 'beta' if '/search?' in url else 'legacy'
+    searches['fetch_livelib_text'].side_effect = lambda url, timeout: 'beta' if '/search?' in url else 'legacy'
     monkeypatch.setattr(source.litres, 'fetch_litres_book', Mock(side_effect=OSError('no details')))
     monkeypatch.setattr(source.livelib, 'fetch_book', Mock(side_effect=OSError('no details')))
     source.identify(log, results, abort, title='Книга', authors=['Автор'])
-    urls = [call.args[0] for call in searches['fetch_url'].call_args_list]
+    urls = [call.args[0] for call in searches['fetch_livelib_text'].call_args_list]
     assert len(urls) == (2 if legacy else 1)
     assert any('/find/' in url for url in urls) is legacy
     found = drain(results)
@@ -154,7 +154,7 @@ def test_missing_detail_is_skipped(source, monkeypatch, searches, log, results, 
 
 
 def test_search_failures_allow_other_sources(source, searches, log, results, abort):
-    searches['fetch_url'].side_effect = OSError('unavailable')
+    searches['fetch_livelib_text'].side_effect = OSError('unavailable')
     searches['search_fantlab'].return_value = [candidate('fantlab', 1)]
     source.identify(log, results, abort, title='Книга')
     assert [mi.identifiers for mi in drain(results)] == [{'fantlab': 'work1'}]

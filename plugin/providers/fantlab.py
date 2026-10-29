@@ -6,7 +6,6 @@ from ..matching import score_match
 from calibre import as_unicode
 from calibre.ebooks.metadata.book.base import Metadata
 from urllib.parse import quote
-import json
 
 
 class FantlabProvider:
@@ -23,8 +22,7 @@ class FantlabProvider:
         url = FANTLAB_API_BASE_URL + '/search-txt?q=' + quote(query)
         log.info('FantLab fallback search: ' + url)
         try:
-            raw = self.transport.fetch_url(url, timeout)
-            payload = json.loads(raw)
+            payload = self.transport.fetch_fantlab_json(url, timeout)
         except Exception as err:
             log.exception('FantLab search failed: %s' % as_unicode(err))
             return []

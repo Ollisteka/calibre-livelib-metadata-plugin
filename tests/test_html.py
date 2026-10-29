@@ -7,18 +7,18 @@ import pytest
 
 
 @pytest.mark.parametrize('graph', [False, True], ids=['standalone-book', 'book-in-graph'])
-def test_json_ld_book(plugin_module, graph):
+def test_json_ld_book(graph):
     book = {'@type': 'Book', 'name': 'Книга', 'author': {'name': 'Автор'}, 'isbn': '9785170906309'}
     payload = {'@graph': [{'@type': 'WebSite'}, book]} if graph else book
     raw = '<script type="application/ld+json">%s</script>' % json.dumps(payload)
     assert parsers.extract_livelib_json(raw) == book
 
 
-def test_broken_json(plugin_module):
+def test_broken_json():
     assert parsers.extract_livelib_json('<script type="application/ld+json">{broken</script>') is None
 
 
-def test_edition_text(plugin_module):
+def test_edition_text():
     raw = ('<div>Издательство: Издатель ISBN: 9785170906309 Год издания: 2020 '
            'Язык: Русский Количество страниц - 320 Возрастные ограничения: 16+ Содержание</div>')
     assert parsers.extract_livelib_page_details(raw) == {
@@ -42,10 +42,10 @@ def test_legacy_card_below_matching_threshold(source):
     assert parsers.parse_search_results(CARD, 'Другая книга', ['Чужой']) == []
 
 
-def test_clean_html(plugin_module):
+def test_clean_html():
     assert html_utils.clean_html('<div>Книга&nbsp;\x01 автора</div>') == '<div>Книга&nbsp; автора</div>'
     assert html_utils.clean_html(None) == ''
 
 
-def test_compact_text(plugin_module):
+def test_compact_text():
     assert html_utils.compact_page_text('<div>Книга&nbsp;\x01 автора</div>') == 'Книга автора'

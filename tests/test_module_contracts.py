@@ -1,4 +1,5 @@
 import json
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -24,7 +25,7 @@ def test_identify_never_requests_cover_bytes(source, monkeypatch, log, results, 
         requested.append(request.full_url)
         if request.full_url != 'https://api.litres.ru/foundation/api/arts/123':
             raise UnexpectedNetwork('Image or unexpected request during identify')
-        return SimpleNamespace(read=lambda: json.dumps({'payload': {'data': {
+        return BytesIO(json.dumps({'payload': {'data': {
             'id': 123, 'title': 'Книга', 'cover_url': 'https://cover/image.jpg'}}}).encode())
     monkeypatch.setattr(transport, 'urlopen', open_request)
     source.identify(log, results, abort, identifiers={'litres': '123'})
@@ -46,7 +47,7 @@ def test_next_search_payload_is_parsed_without_source():
 
 
 def test_search_parser_errors_still_propagate(source, monkeypatch, log):
-    monkeypatch.setattr(source.transport, 'fetch_url', Mock(return_value='html'))
+    monkeypatch.setattr(source.transport, 'fetch_livelib_text', Mock(return_value='html'))
     monkeypatch.setattr(provider, 'parse_search_results', Mock(side_effect=ValueError('parse')))
     with pytest.raises(ValueError, match='parse'):
         source.livelib.search_page('https://example.invalid', 'Книга', [], 7, log=log)
