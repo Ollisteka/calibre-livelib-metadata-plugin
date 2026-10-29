@@ -6,6 +6,14 @@ import json
 import pytest
 
 
+def test_long_unicode_page_preserves_non_bmp_text():
+    text = '\U0001f600' * 2048
+    raw = '<html><head><title>Книга</title></head><body><p>' + text + '</p></body></html>'
+    root = html_utils.safe_html_fromstring(raw)
+    assert root.xpath('//title/text()') == ['Книга']
+    assert root.xpath('//p/text()') == [text]
+
+
 @pytest.mark.parametrize('graph', [False, True], ids=['standalone-book', 'book-in-graph'])
 def test_json_ld_book(plugin_module, graph):
     book = {'@type': 'Book', 'name': 'Книга', 'author': {'name': 'Автор'}, 'isbn': '9785170906309'}

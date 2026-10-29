@@ -14,8 +14,19 @@ from calibre.utils.logging import Log
 
 
 def main(path):
+    # Calibre may preload an installed copy while importing customize. Ensure
+    # submodules come from the ZIP under test, not that installed version.
+    for name in tuple(sys.modules):
+        if name == 'calibre_plugins.livelib_metadata' or name.startswith('calibre_plugins.livelib_metadata.'):
+            del sys.modules[name]
     plugin = loader.load(path)(None)
     assert type(plugin).__module__ == 'calibre_plugins.livelib_metadata'
+    from calibre_plugins.livelib_metadata.html_utils import safe_html_fromstring
+    unicode_text = '\U0001f600' * 2048
+    unicode_page = '<html><head><title>Книга</title></head><body><p>' + unicode_text + '</p></body></html>'
+    root = safe_html_fromstring(unicode_page)
+    assert root.xpath('//title/text()') == ['Книга']
+    assert root.xpath('//p/text()') == [unicode_text]
     log = Log()
     abort = Event()
     calls = []
