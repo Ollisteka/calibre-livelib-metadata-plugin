@@ -1,87 +1,49 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
+
 __license__ = 'GPL-3.0-only'
+
+
 __copyright__ = '2026, Emin Ganbarov and contributors'
 
+
 import json
+
+
 import re
+
+
 from datetime import datetime
+
+
 from html import escape, unescape
+
+
 from queue import Empty, Queue
+
+
 from urllib.parse import quote, urlencode, urljoin, urlsplit
+
+
 from urllib.request import Request, urlopen
+
 
 from lxml import html
 
+
 from calibre import as_unicode
+
+
 from calibre.ebooks.metadata import check_isbn
+
+
 from calibre.ebooks.metadata.book.base import Metadata
+
+
 from calibre.ebooks.metadata.sources.base import Source
 
 
-BASE_URL = 'https://www.livelib.ru'
-BETA_BASE_URL = 'https://beta.livelib.ru'
-FANTLAB_BASE_URL = 'https://fantlab.ru'
-FANTLAB_API_BASE_URL = 'https://api.fantlab.ru'
-LITRES_API_BASE = 'https://api.litres.ru/foundation/api'
-LITRES_WEB_BASE = 'https://www.litres.ru'
-IDENTIFIER_TYPE_LITRES = 'litres'
-IDENTIFIER_TYPE_LIVELIB = 'livelib'
-IDENTIFIER_TYPE_FANTLAB = 'fantlab'
-IDENTIFIER_TYPE_ISBN = 'isbn'
-FANTLAB_IDENTIFIER_PATTERN = re.compile(r'[a-z][a-z0-9_-]*\d+', re.IGNORECASE)
-USER_AGENT = (
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 14_0) '
-    'AppleWebKit/537.36 (KHTML, like Gecko) '
-    'Chrome/126.0.0.0 Safari/537.36'
-)
-
-# A candidate at or above this score already matches title and author closely
-# enough that the slow, ddos-guard-prone legacy livelib.ru search can be skipped.
 STRONG_MATCH_SCORE = 100
-
-
-def norm(value):
-    value = (value or '').casefold().replace('ё', 'е')
-    value = re.sub(r'[\W_]+', ' ', value, flags=re.UNICODE)
-    return re.sub(r'\s+', ' ', value).strip()
-
-
-def score_match(query_title, query_authors, title, author):
-    qt = norm(query_title)
-    qa = norm(' '.join(query_authors or []))
-    rt = norm(title)
-    ra = norm(author)
-    score = 0
-    if qt and rt:
-        if qt == rt:
-            score += 80
-        elif qt in rt or rt in qt:
-            score += 45
-        elif all(token in rt for token in qt.split()[:3]):
-            score += 30
-    if qa and ra:
-        if qa == ra:
-            score += 60
-        elif qa in ra or ra in qa:
-            score += 35
-        else:
-            q_tokens = set(qa.split())
-            r_tokens = set(ra.split())
-            score += 10 * len(q_tokens & r_tokens)
-    return score
-
-
-def title_match_enough(query_title, result_title):
-    qt = norm(query_title)
-    rt = norm(result_title)
-    if not qt or not rt:
-        return False
-    if qt == rt or qt in rt or rt in qt:
-        return True
-    q_tokens = [token for token in qt.split() if len(token) > 1]
-    r_tokens = set(rt.split())
-    return len(set(q_tokens) & r_tokens) >= min(2, len(q_tokens))
 
 
 def clean_html(raw):
@@ -323,6 +285,51 @@ def append_edition_details(comments, details, rating_count=None):
     return ((comments or '') + block) if comments else block
 
 
+from .constants import BASE_URL
+
+
+from .constants import BETA_BASE_URL
+
+
+from .constants import FANTLAB_BASE_URL
+
+
+from .constants import FANTLAB_API_BASE_URL
+
+
+from .constants import LITRES_API_BASE
+
+
+from .constants import LITRES_WEB_BASE
+
+
+from .constants import IDENTIFIER_TYPE_LITRES
+
+
+from .constants import IDENTIFIER_TYPE_LIVELIB
+
+
+from .constants import IDENTIFIER_TYPE_FANTLAB
+
+
+from .constants import IDENTIFIER_TYPE_ISBN
+
+
+from .constants import FANTLAB_IDENTIFIER_PATTERN
+
+
+from .constants import USER_AGENT
+
+
+from .matching import norm
+
+
+from .matching import score_match
+
+
+from .matching import title_match_enough
+
+
 class LiveLibMetadata(Source):
     name = 'LiveLib Metadata'
     description = 'Downloads Russian metadata and covers from LitRes, LiveLib, and FantLab'
@@ -343,6 +350,7 @@ class LiveLibMetadata(Source):
     supports_gzip_transfer_encoding = True
     can_get_multiple_covers = True
 
+
     def fetch_url(self, url, timeout):
         headers = {
             'User-Agent': USER_AGENT,
@@ -352,6 +360,7 @@ class LiveLibMetadata(Source):
         }
         raw = urlopen(Request(url, headers=headers), timeout=timeout).read()
         return raw.decode('utf-8', 'replace') if isinstance(raw, bytes) else raw
+
 
     def fetch_json(self, url, timeout):
         headers = {
@@ -363,6 +372,7 @@ class LiveLibMetadata(Source):
         }
         raw = urlopen(Request(url, headers=headers), timeout=timeout).read()
         return json.loads(raw.decode('utf-8', 'replace') if isinstance(raw, bytes) else raw)
+
 
     def absolutize_litres_cover(self, cover_url, art_id=None):
         if art_id:
@@ -376,6 +386,7 @@ class LiveLibMetadata(Source):
         if cover_url.startswith('/'):
             return LITRES_WEB_BASE + cover_url
         return cover_url
+
 
     def attach_cover_data(self, mi, cover_url, timeout):
         if not cover_url:
@@ -405,6 +416,7 @@ class LiveLibMetadata(Source):
         mi.cover_data = (fmt, raw)
         mi.has_cover = True
 
+
     def get_book_url(self, identifiers):
         litres_id = identifiers.get(IDENTIFIER_TYPE_LITRES)
         if litres_id:
@@ -416,6 +428,7 @@ class LiveLibMetadata(Source):
         if fantlab_id and FANTLAB_IDENTIFIER_PATTERN.fullmatch(as_unicode(fantlab_id)):
             return (IDENTIFIER_TYPE_FANTLAB, fantlab_id, FANTLAB_BASE_URL + '/' + as_unicode(fantlab_id))
 
+
     def get_book_url_name(self, idtype, idval, url):
         names = {
             IDENTIFIER_TYPE_LITRES: 'Litres',
@@ -424,11 +437,13 @@ class LiveLibMetadata(Source):
         }
         return names.get(idtype, self.name)
 
+
     def id_from_url(self, url):
         match = re.search(r'livelib\.ru/book/([^/?#]+)', url or '')
         if match:
             return (IDENTIFIER_TYPE_LIVELIB, match.group(1))
         return None
+
 
     def identify(self, log, result_queue, abort, title=None, authors=None,
                  identifiers=None, timeout=30):
@@ -513,6 +528,7 @@ class LiveLibMetadata(Source):
             mi.source_relevance = -candidate['score']
             result_queue.put(mi)
 
+
     def search_litres(self, log, query_title, query_authors, timeout):
         queries = []
         if query_title:
@@ -571,6 +587,7 @@ class LiveLibMetadata(Source):
         candidates.sort(key=lambda row: row['score'], reverse=True)
         return candidates
 
+
     def metadata_from_litres_candidate(self, candidate, item=None):
         item = item or candidate.get('raw') or {}
         title = item.get('title') or candidate.get('title') or ''
@@ -619,6 +636,7 @@ class LiveLibMetadata(Source):
             mi.has_cover = True
         return mi
 
+
     def fetch_litres_book(self, log, candidate, timeout):
         art_id = candidate.get('id')
         if not art_id:
@@ -628,6 +646,7 @@ class LiveLibMetadata(Source):
         payload = self.fetch_json(url, timeout).get('payload') or {}
         item = payload.get('data') or payload
         return self.metadata_from_litres_candidate(candidate, item=item)
+
 
     def parse_beta_search_payload(self, raw, query_title, query_authors):
         decoded = decode_next_payload(raw)
@@ -680,6 +699,7 @@ class LiveLibMetadata(Source):
                     'rating': as_unicode(rating) if rating is not None else None,
                 })
         return candidates
+
 
     def parse_search_results(self, raw, query_title, query_authors):
         candidates = self.parse_beta_search_payload(raw, query_title, query_authors)
@@ -779,6 +799,7 @@ class LiveLibMetadata(Source):
         candidates.sort(key=lambda row: row['score'], reverse=True)
         return candidates
 
+
     def search_fantlab(self, log, query_title, query_authors, timeout):
         query = ' '.join([query_title or ''] + list(query_authors or [])).strip()
         if not query:
@@ -822,6 +843,7 @@ class LiveLibMetadata(Source):
         candidates.sort(key=lambda row: row['score'], reverse=True)
         return candidates
 
+
     def metadata_from_search_candidate(self, candidate):
         title = candidate.get('title') or ''
         author = candidate.get('author') or 'Unknown'
@@ -845,6 +867,7 @@ class LiveLibMetadata(Source):
             self.cache_identifier_to_cover_url(livelib_id, cover_url)
         return mi
 
+
     def metadata_from_fantlab_candidate(self, candidate):
         mi = Metadata(candidate.get('title') or '', candidate.get('authors') or ['Unknown'])
         mi.language = 'rus'
@@ -866,6 +889,7 @@ class LiveLibMetadata(Source):
             self.cache_identifier_to_cover_url(fantlab_id, cover_url)
             mi.has_cover = True
         return mi
+
 
     def fetch_book(self, log, url, timeout):
         url = livelib_beta_url(url)
@@ -937,6 +961,7 @@ class LiveLibMetadata(Source):
 
         return mi
 
+
     def get_cached_cover_url(self, identifiers):
         litres_id = (identifiers or {}).get(IDENTIFIER_TYPE_LITRES)
         if litres_id:
@@ -948,6 +973,7 @@ class LiveLibMetadata(Source):
         if fantlab_id:
             return self.cached_identifier_to_cover_url(fantlab_id)
         return None
+
 
     def find_cover_url_direct(self, log, title=None, authors=None, timeout=30):
         for candidate in self.search_litres(log, title, authors, timeout):
@@ -970,6 +996,7 @@ class LiveLibMetadata(Source):
             if candidate.get('cover_url'):
                 return candidate['cover_url']
         return None
+
 
     def find_all_cover_urls(self, log, result_queue_abort, title, authors, identifiers, timeout):
         """Collect cover URLs from every matched source, ordered by relevance."""
@@ -997,6 +1024,7 @@ class LiveLibMetadata(Source):
         if not urls and (title or authors):
             add(self.find_cover_url_direct(log, title=title, authors=authors, timeout=timeout))
         return urls
+
 
     def download_cover(self, log, result_queue, abort, title=None, authors=None,
                        identifiers=None, timeout=30, get_best_cover=False):
