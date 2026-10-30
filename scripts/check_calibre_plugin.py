@@ -1,9 +1,11 @@
-"""Run with calibre-debug -e scripts/check_calibre_plugin.py -- ZIP_PATH.
+"""Run with calibre-debug -e scripts/check_calibre_plugin.py -- ZIP_PATH [PREVIOUS_ZIP].
 
+Set CALIBRE_CONFIG_DIRECTORY to an isolated test directory before running.
 Uses real Calibre classes and ZIP loading, but synthetic service responses and a
-recording cover downloader. Does not install into or modify a user's profile.
+recording cover downloader. Tests write preferences only in that test profile.
 """
 import json
+import os
 from queue import Queue
 import sys
 from threading import Event
@@ -11,16 +13,44 @@ from unittest.mock import Mock
 
 from calibre.customize.zipplugin import loader
 from calibre.utils.logging import Log
+from qt.core import QApplication, QCheckBox
 
 
-def main(path):
+def main(path, previous_path=None):
+    if not os.environ.get('CALIBRE_CONFIG_DIRECTORY'):
+        raise SystemExit('Set CALIBRE_CONFIG_DIRECTORY to an isolated test profile first')
     # Calibre may preload an installed copy while importing customize. Ensure
     # submodules come from the ZIP under test, not that installed version.
     for name in tuple(sys.modules):
         if name == 'calibre_plugins.livelib_metadata' or name.startswith('calibre_plugins.livelib_metadata.'):
             del sys.modules[name]
+    if previous_path:
+        previous = loader.load(previous_path)(None)
+        assert previous.version < (0, 4, 0)
+        assert 'calibre_plugins.livelib_metadata.identifiers' in sys.modules
+        # Keep the previous modules loaded, as Preferences -> Load plugin from
+        # file does when replacing an installed plugin in a running Calibre.
     plugin = loader.load(path)(None)
     assert type(plugin).__module__ == 'calibre_plugins.livelib_metadata'
+    # Use an isolated CALIBRE_CONFIG_DIRECTORY when running this script.
+    # Exercise Calibre's real generated widget and JSONConfig persistence.
+    app = QApplication.instance() or QApplication([])
+    widget = plugin.config_widget()
+    switches = {w.opt.name: w for w in widget.widgets if isinstance(w, QCheckBox)}
+    assert set(switches) == {'use_litres', 'use_livelib', 'use_fantlab'}
+    assert all(w.isChecked() for w in switches.values())
+    switches['use_litres'].setChecked(False)
+    # Discarding a widget must not commit its changes.
+    assert type(plugin)(None).prefs['use_litres'] is True
+    plugin.save_settings(widget)
+    assert type(plugin)(None).prefs['use_litres'] is False
+    switches['use_litres'].setChecked(True)
+    plugin.save_settings(widget)
+    plugin.prefs['ignore_fields'] = ['tags']
+    widget = plugin.config_widget()
+    plugin.save_settings(widget)
+    assert plugin.prefs['ignore_fields'] == ['tags']
+    plugin.prefs['ignore_fields'] = []
     from calibre_plugins.livelib_metadata.html_utils import safe_html_fromstring
     unicode_text = '\U0001f600' * 2048
     unicode_page = '<html><head><title>Книга</title></head><body><p>' + unicode_text + '</p></body></html>'
@@ -50,14 +80,16 @@ def main(path):
     plugin.transport.fetch_fantlab_json = lambda url, timeout: json.loads(text(url, timeout))
     plugin.transport.fetch_livelib_text = text
     plugin.transport.fetch_litres_json = data
-    for identifiers in ({}, {'litres': '11'}, {'livelib': '22'}):
+    for identifiers in ({}, {'litres': '11'}, {'livelib': '22'}, {'fantlab': 'work33'}):
         queue = Queue()
         plugin.identify(log, queue, abort, title='Книга', authors=['Автор'], identifiers=identifiers)
         found = [queue.get_nowait() for _ in range(queue.qsize())]
         assert len(found) == (3 if not identifiers else 1)
         assert all(mi.title == 'Книга' for mi in found)
-        if identifiers.get('livelib'):
-            assert found[0].isbn == '9785170906309'
+        assert all(mi.identifiers == {'litres': '11', 'livelib': '22',
+                                     'fantlab': 'work33', 'isbn': '9785170906309'} for mi in found)
+        assert all(mi.isbn == '9785170906309' for mi in found)
+        assert len(plugin.get_book_urls(found[0].identifiers)) == 3
     downloader = Mock()
     plugin.download_multiple_covers = downloader
     plugin.download_cover(log, Queue(), abort, title='Книга', authors=['Автор'], get_best_cover=True)
@@ -65,6 +97,17 @@ def main(path):
     assert len(urls) == 4, urls
     assert downloader.call_args.args[3] is True
     assert plugin.get_cached_cover_url({'litres': '11'})
+    plugin.prefs['use_litres'] = False
+    plugin.prefs['use_livelib'] = False
+    plugin.prefs['use_fantlab'] = False
+    before = len(calls)
+    queue = Queue()
+    plugin.identify(log, queue, abort, title='Книга', identifiers={'litres': '11'})
+    plugin.download_cover(log, queue, abort, title='Книга', identifiers={'litres': '11'})
+    assert queue.empty() and len(calls) == before
+    assert plugin.get_cached_cover_url({'litres': '11'}) is None
+    for key in ('use_litres', 'use_livelib', 'use_fantlab'):
+        plugin.prefs[key] = True
     abort.set()
     queue = Queue()
     before = len(calls)
@@ -72,8 +115,9 @@ def main(path):
     assert queue.empty() and len(calls) == before
     other = type(plugin)(None)
     assert other.get_cached_cover_url({'litres': '11'}) is None
-    print('PASS: real Calibre ZIP, search, direct IDs, ISBN, cover handoff, cache, cancellation, isolation')
+    print('PASS: real Calibre ZIP, native settings widget and persistence, multiple IDs, '
+          'direct IDs, ISBN enrichment, links, covers, disabled sources, cancellation, isolation')
 
 
 if __name__ == '__main__':
-    main(sys.argv[1])
+    main(sys.argv[1], sys.argv[2] if len(sys.argv) > 2 else None)

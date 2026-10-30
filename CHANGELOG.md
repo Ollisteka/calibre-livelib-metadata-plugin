@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.4.0 - Unreleased
+
+- Reload the plugin's submodules when replacing an installed ZIP so an update from 0.3.3 does not mix old and new code in a running Calibre.
+- Automatically collect LitRes, LiveLib, and FantLab IDs for matching results, including lookups that already have a service ID.
+- Fill only missing metadata fields; preserve populated comments, ratings, tags, and existing identifiers. Skip ambiguous additional IDs.
+- Add three source switches through Calibre's native metadata source configuration; disabled sources are excluded from metadata and cover requests.
+- Return all service links through `get_book_urls` and recognize URLs from all three services.
+- Support direct FantLab work/edition lookup and separate cover cache entries by source.
+- Preserve the original provider scoring and acceptance rules.
+
 ## v0.3.4
 
 - Fix LiveLib cover downloads crashing when JSON-LD `image` is an ImageObject instead of a URL string.

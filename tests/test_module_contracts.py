@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
+from calibre.ebooks.metadata.book.base import Metadata
 
 from offline_support import UnexpectedNetwork
 from plugin_under_test import LiveLibMetadata, transport
@@ -13,7 +14,7 @@ from plugin_under_test.providers.livelib import parsers, provider
 
 def test_instances_do_not_share_cache_or_dependencies(source):
     other = LiveLibMetadata()
-    source.litres.cache_cover('1', 'https://cover/1')
+    source._cover_cache_writer('litres')('1', 'https://cover/1')
     assert other.get_cached_cover_url({'litres': '1'}) is None
     for name in ('transport', 'litres', 'livelib', 'fantlab', 'covers'):
         assert getattr(source, name) is not getattr(other, name)
@@ -28,6 +29,7 @@ def test_identify_never_requests_cover_bytes(source, monkeypatch, log, results, 
         return BytesIO(json.dumps({'payload': {'data': {
             'id': 123, 'title': 'Книга', 'cover_url': 'https://cover/image.jpg'}}}).encode())
     monkeypatch.setattr(transport, 'urlopen', open_request)
+    source.prefs.update(use_livelib=False, use_fantlab=False)
     source.identify(log, results, abort, identifiers={'litres': '123'})
     assert len(requested) == 1
     assert results.get_nowait().has_cover
@@ -60,8 +62,8 @@ def test_identify_with_explicit_fake_providers(log, results, abort):
             calls.append(name)
             return rows
         return run
-    first = SimpleNamespace(source_relevance=None)
-    second = SimpleNamespace(source_relevance=None)
+    first = Metadata('Первый', ['Автор'])
+    second = Metadata('Второй', ['Автор'])
     litres = SimpleNamespace(search_litres=search('litres', [{'source': 'litres', 'score': 100}]),
                               fetch_litres_book=lambda *args: first)
     livelib = SimpleNamespace(search_page=search('beta', []))
@@ -73,6 +75,6 @@ def test_identify_with_explicit_fake_providers(log, results, abort):
     assert first.source_relevance == second.source_relevance == -100
 
 
-def test_higher_priority_cache_miss_does_not_use_lower_source(source):
-    source.livelib.cache_cover('2', 'https://cover/2')
-    assert source.get_cached_cover_url({'litres': '1', 'livelib': '2'}) is None
+def test_higher_priority_cache_miss_uses_lower_enabled_source(source):
+    source._cover_cache_writer('livelib')('2', 'https://cover/2')
+    assert source.get_cached_cover_url({'litres': '1', 'livelib': '2'}) == 'https://cover/2'

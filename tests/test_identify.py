@@ -41,7 +41,7 @@ def searches(source, monkeypatch):
     return doubles
 
 
-def test_direct_litres_id_fetches_details_without_search(source, monkeypatch, searches, log, results, abort):
+def test_direct_litres_id_also_searches_missing_sources(source, monkeypatch, searches, log, results, abort):
     fetch = Mock(return_value={'payload': {'data': {
         'id': '123', 'title': 'Подробное', 'language_code': 'ru'}}})
     monkeypatch.setattr(source.transport, 'fetch_litres_json', fetch)
@@ -52,11 +52,11 @@ def test_direct_litres_id_fetches_details_without_search(source, monkeypatch, se
     assert (found[0].title, found[0].authors, found[0].language) == ('Подробное', ['Автор'], 'rus')
     assert found[0].source_relevance == -1000
     fetch.assert_called_once_with('https://api.litres.ru/foundation/api/arts/123', 30)
-    for search in searches.values():
-        search.assert_not_called()
+    searches['search_litres'].assert_not_called()
+    searches['search_fantlab'].assert_called_once()
 
 
-def test_direct_livelib_id_detail_error_returns_query_metadata_without_search(
+def test_direct_livelib_id_detail_error_also_searches_missing_sources(
         source, monkeypatch, searches, log, results, abort):
     fetch = Mock(side_effect=OSError('detail unavailable'))
     monkeypatch.setattr(source.livelib, 'fetch_book', fetch)
@@ -68,17 +68,18 @@ def test_direct_livelib_id_detail_error_returns_query_metadata_without_search(
     assert found[0].comments is None
     assert found[0].source_relevance == -1000
     fetch.assert_called_once_with(log, 'https://beta.livelib.ru/book/123', 30)
-    for search in searches.values():
-        search.assert_not_called()
+    searches['search_litres'].assert_called_once()
+    searches['search_fantlab'].assert_called_once()
+    searches['fetch_url'].assert_not_called()
 
 
-def test_direct_litres_priority(source, monkeypatch, searches, log, results, abort):
+def test_both_direct_ids_are_fetched(source, monkeypatch, searches, log, results, abort):
     monkeypatch.setattr(source.litres, 'fetch_litres_book', Mock(side_effect=OSError('no details')))
-    livelib_details = Mock()
+    livelib_details = Mock(side_effect=OSError('no details'))
     monkeypatch.setattr(source.livelib, 'fetch_book', livelib_details)
     source.identify(log, results, abort, title='Книга', identifiers={'litres': '1', 'livelib': '2'})
-    assert [mi.identifiers for mi in drain(results)] == [{'litres': '1'}]
-    livelib_details.assert_not_called()
+    assert [mi.identifiers for mi in drain(results)] == [{'litres': '1', 'livelib': '2'}] * 2
+    livelib_details.assert_called_once()
 
 
 @pytest.mark.parametrize('score, legacy', [

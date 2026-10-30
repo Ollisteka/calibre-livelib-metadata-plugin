@@ -2,6 +2,7 @@ import importlib.util
 from pathlib import Path
 import subprocess
 import sys
+import pytest
 from zipfile import ZipFile
 
 
@@ -11,7 +12,8 @@ builder = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(builder)
 
 
-def test_archive_content_and_import(tmp_path):
+@pytest.mark.parametrize('cached_submodules', [False, True], ids=['fresh-import', 'upgrade-with-cached-modules'])
+def test_archive_content_and_import(tmp_path, cached_submodules):
     import shutil
     shutil.copytree(ROOT / 'plugin', tmp_path / 'plugin')
     nested_cache = tmp_path / 'plugin/providers/livelib/__pycache__'
@@ -36,12 +38,23 @@ package = types.ModuleType('archive_plugin')
 package.__package__ = package.__name__
 package.__path__ = [archive]
 sys.modules[package.__name__] = package
+if sys.argv[2] == 'cached':
+    for suffix in ('constants', 'identifiers', 'covers', 'identify', 'providers', 'providers.fantlab'):
+        name = package.__name__ + '.' + suffix
+        stale = types.ModuleType(name)
+        stale.from_previous_zip = True
+        sys.modules[name] = stale
+unrelated = types.ModuleType('unrelated_plugin.identifiers')
+sys.modules[unrelated.__name__] = unrelated
 exec(zipimport.zipimporter(archive).get_code('__init__'), package.__dict__)
 assert package.LiveLibMetadata().name == 'LiveLib Metadata'
-for name in sys.argv[2:]:
+assert sys.modules[unrelated.__name__] is unrelated
+assert not hasattr(sys.modules['archive_plugin.identifiers'], 'from_previous_zip')
+assert len(package.LiveLibMetadata().get_book_urls({'litres': '1', 'livelib': '2'})) == 2
+for name in sys.argv[3:]:
     importlib.import_module('archive_plugin.' + name)
 '''
     modules = sorted(name[:-3].replace('/', '.') for name in names
                      if name.endswith('.py') and not name.endswith('__init__.py'))
-    subprocess.run([sys.executable, '-c', code, str(archive), *modules],
+    subprocess.run([sys.executable, '-c', code, str(archive), 'cached' if cached_submodules else 'fresh', *modules],
                    cwd=ROOT / 'tests', check=True, capture_output=True, text=True)

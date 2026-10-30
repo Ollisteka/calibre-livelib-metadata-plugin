@@ -15,8 +15,8 @@ poor matches, or no cover at all, this plugin is for you.
 - **Three Russian sources in one plugin.** Queries LitRes (public API), LiveLib (beta pages), and
   FantLab, then merges and ranks the results by how well title and author match your book.
 - **Multiple covers from returned candidates.** The cover picker receives available cached covers
-  from up to six ranked candidates. Direct-ID lookup selects LitRes before LiveLib; it does not
-  search every service or guarantee a candidate from each source.
+  from up to six ranked candidates. Known IDs are fetched for each enabled source, and missing
+  IDs are searched with a candidate slot reserved for each source within the result limit.
 - **High-resolution covers.** Prefers the original LiveLib `/o/...jpeg` image and falls back to a
   preview automatically if the original is unavailable.
 - **Rich Russian metadata.** Imports Russian descriptions, genre tags, rating and vote count, ISBN,
@@ -27,22 +27,46 @@ poor matches, or no cover at all, this plugin is for you.
 - **Accurate matching.** Rejects weak title/author matches so a book is not overwritten by a
   same-title work from a different author.
 - **Identifiers.** Stores `litres`, `livelib`, and `fantlab` identifiers so repeat lookups and cover downloads are fast and exact. FantLab identifiers retain the resource path returned by its API (for example, `work123`) so links use the correct FantLab page type. Numeric-only FantLab IDs saved by older plugin versions need to be refreshed to recover that page type.
+- **Multiple identifiers per result.** Adds IDs from other enabled sources when their accepted candidates have the same normalized title and authors. Each result keeps its populated fields; other sources fill only missing fields. Ambiguous IDs from the same source are skipped. The original search scoring and acceptance thresholds are unchanged; no additional edition verification is introduced.
+- **Choose your sources.** Native Calibre settings let you independently disable LitRes, LiveLib, or FantLab for metadata and covers.
 
 ---
 
 ## Search order
 
-The plugin tries sources in order of reliability and stops escalating once it already has a strong
-title + author match:
+The plugin queries enabled sources and searches for missing IDs even when a book already has
+an ID from another service:
 
-1. `litres:` identifier — used directly when the book already has one.
-2. `livelib:` identifier — used directly when the book already has one.
-3. **LitRes** public API search.
-4. **LiveLib** fast beta search (`beta.livelib.ru/search`).
-5. **LiveLib** legacy search (`www.livelib.ru/find`) — only when steps 3–4 found nothing strong.
-6. **FantLab** public API search.
+1. Known `litres:`, `livelib:`, and `fantlab:` IDs are used directly for enabled sources. FantLab direct lookup supports `work…` and `edition…` IDs.
+2. **LitRes** public API search, if its ID is missing.
+3. **LiveLib** fast beta search (`beta.livelib.ru/search`), if its ID is missing.
+4. **LiveLib** legacy search (`www.livelib.ru/find`) — only when the current search candidates contain no strong match.
+5. **FantLab** public API search, if its ID is missing.
 
 Skipping the slow legacy LiveLib search on a strong match keeps a typical lookup fast.
+When a known ID resolves to a result, that result anchors the lookup; other sources supply
+matching IDs and missing metadata rather than unrelated alternative books.
+
+## Source settings
+
+Open **Preferences → Metadata download**, select **LiveLib Metadata**, and click
+**Configure selected source**. Calibre's standard configuration dialog provides:
+
+- **Использовать LitRes**
+- **Использовать LiveLib**
+- **Использовать FantLab**
+
+All three are enabled by default. Disabling a source prevents searches, direct ID lookups,
+fallback requests, and cover downloads from that source, including cached covers. Existing IDs
+and their clickable book links remain available. Disabling all sources is allowed and makes
+the plugin perform no network requests.
+
+Settings are saved in the Calibre profile and shared across its libraries. Saved changes apply
+to subsequent operations. The standard selection of metadata fields remains in the same dialog.
+
+Enrichment does not replace populated annotations, ratings, tags, or other fields in a plugin
+result. It does not append extra tags or edition details to populated comments. Applying a result
+to an existing library record still follows Calibre's metadata download settings.
 
 ---
 
@@ -73,8 +97,9 @@ Download the newest `LiveLib.Metadata.zip` from the releases page and install it
 
 - Better input gives better matches. A clean Russian title plus the author name in the book's fields
   produces the most accurate results.
-- If you already know the book on LitRes or LiveLib, add its `litres:` or `livelib:` identifier in
-  Calibre — the plugin will then fetch that exact edition.
+- If you already know the book on LitRes, LiveLib, or FantLab, add its `litres:`, `livelib:`, or
+  `fantlab:` identifier in Calibre. The plugin uses that ID directly and looks for missing IDs
+  in the other enabled sources.
 - Use **Download only covers** if you just want artwork; the plugin returns covers from all matched
   sources so you can compare.
 
@@ -134,6 +159,16 @@ Linux:
 python3.11 -m venv .venv
 .venv/bin/python -m pip install -r requirements-dev.txt
 .venv/bin/python -m pytest
+```
+
+The real-Calibre ZIP and native settings check uses synthetic service responses and a separate
+test profile. After building the ZIP, run on Windows:
+
+```powershell
+$env:CALIBRE_CONFIG_DIRECTORY = Join-Path (Get-Location) 'local-notes/calibre-check-profile'
+$env:QT_QPA_PLATFORM = 'offscreen'
+calibre-debug -e scripts/check_calibre_plugin.py -- dist/LiveLib.Metadata.zip
+Remove-Item Env:CALIBRE_CONFIG_DIRECTORY, Env:QT_QPA_PLATFORM
 ```
 
 ## Releasing

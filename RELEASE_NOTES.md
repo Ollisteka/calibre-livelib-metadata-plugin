@@ -1,9 +1,14 @@
-# LiveLib Metadata for Calibre v0.3.3
+# LiveLib Metadata for Calibre v0.4.0
 
-Patch release of `LiveLib Metadata`, a Calibre metadata source plugin for Russian-language book libraries.
+Feature release of `LiveLib Metadata`, a Calibre metadata source plugin for Russian-language book libraries.
 
 ## Highlights
 
+- Automatically stores IDs from all matching enabled sources and provides a clickable link to each service.
+- Fills empty metadata fields while preserving populated annotations, tags, ratings, and existing IDs.
+- Adds independent LitRes, LiveLib, and FantLab switches in Calibre's standard source settings. Disabled sources are excluded from metadata and cover requests.
+- Supports direct FantLab work/edition IDs and separates cached covers by source.
+- Retains the author's original search scoring and acceptance thresholds; no additional edition verification is introduced.
 - Fixes missing LitRes covers by offering covers from every matched source (LitRes, LiveLib, FantLab) together.
 - Faster identification: cover bytes are no longer downloaded during identify, and the slow legacy livelib.ru search is skipped when a strong match is already found.
 - Searches LitRes, LiveLib, and FantLab.

@@ -64,26 +64,26 @@ def test_litres_cover(source, url, art_id, expected):
 @pytest.mark.parametrize('kind', ['litres', 'livelib', 'fantlab'])
 def test_cache(source, kind):
     assert source.get_cached_cover_url({kind: '1'}) is None
-    getattr(source, kind).cache_cover('1', 'https://cover/1')
+    source._cover_cache_writer(kind)('1', 'https://cover/1')
     assert source.get_cached_cover_url({kind: '1'}) == 'https://cover/1'
     assert source.get_cached_cover_url(None) is None
 
 
 def test_cache_priority(source):
     for kind, identifier in [('litres', '1'), ('livelib', '2'), ('fantlab', 'work3')]:
-        getattr(source, kind).cache_cover(identifier, 'https://cover/' + identifier)
+        source._cover_cache_writer(kind)(identifier, 'https://cover/' + identifier)
     assert source.get_cached_cover_url({'litres': '1', 'livelib': '2', 'fantlab': 'work3'}) == 'https://cover/1'
     assert source.get_cached_cover_url({'livelib': '2', 'fantlab': 'work3'}) == 'https://cover/2'
 
 
-def test_collect_covers(source, monkeypatch, log, abort):
-    source.litres.cache_cover('initial', 'https://cover/cached')
+def test_collect_covers(source, plugin_module, monkeypatch, log, abort):
+    source._cover_cache_writer('litres')('initial', 'https://cover/cached')
     def identify(log, queue, abort, **kwargs):
         for identifier, url in [('1', 'https://cover/one'), ('2', 'https://cover/cached'),
                                 ('3', 'https://cover/three'), ('4', None)]:
             mi = calibre_metadata.Metadata('Книга', ['Автор'])
             mi.set_identifier('litres', identifier)
-            source.litres.cache_cover(identifier, url)
+            source._cover_cache_writer('litres')(identifier, url)
             queue.put(mi)
     monkeypatch.setattr(source, 'identify', identify)
     direct = Mock(side_effect=AssertionError('No fallback when covers exist'))
@@ -98,7 +98,9 @@ def test_cover_direct_fallback(source, monkeypatch, log, abort):
     direct = Mock(return_value='https://cover/direct')
     monkeypatch.setattr(source.covers, 'find_cover_url_direct', direct)
     assert source.covers.find_all_cover_urls(log, abort, 'Книга', [], {}, 7) == ['https://cover/direct']
-    direct.assert_called_once_with(log, title='Книга', authors=[], timeout=7, abort=abort)
+    assert direct.call_count == 1
+    assert direct.call_args.kwargs['enabled'] == frozenset(('litres', 'livelib', 'fantlab'))
+    assert 0 < direct.call_args.kwargs['timeout'] <= 7
 
 
 def test_no_cover_query(source, monkeypatch, log, abort):
