@@ -18,6 +18,7 @@ from .constants import IDENTIFIER_TYPE_ISBN
 from .constants import IDENTIFIER_TYPE_LITRES
 from .constants import IDENTIFIER_TYPE_LIVELIB
 from .config import SOURCE_OPTIONS
+from .config import PERSONAL_OPTIONS
 from .config import enabled_sources
 from .covers import CoverService
 from .covers import expand_cover_urls
@@ -29,6 +30,7 @@ from .identify import identify
 from .providers.fantlab import FantlabProvider
 from .providers.litres import LitresProvider
 from .providers.livelib.provider import LiveLibProvider
+from .providers.livelib.reading import ReadingHistory
 from .transport import Transport
 from calibre.ebooks.metadata.sources.base import Source
 from time import monotonic
@@ -41,7 +43,7 @@ class LiveLibMetadata(Source):
     name = 'LiveLib Metadata'
     description = 'Downloads Russian metadata and covers from LitRes, LiveLib, and FantLab'
     author = 'OpenAI Codex for Emin'
-    version = (0, 4, 0)
+    version = (0, 5, 0)
     minimum_calibre_version = (6, 0, 0)
 
     capabilities = frozenset(['identify', 'cover'])
@@ -56,7 +58,7 @@ class LiveLibMetadata(Source):
     has_html_comments = True
     supports_gzip_transfer_encoding = True
     can_get_multiple_covers = True
-    options = SOURCE_OPTIONS
+    options = SOURCE_OPTIONS + PERSONAL_OPTIONS
     config_help_message = (
         'Выберите источники метаданных и обложек. Если отключить все источники, '
         'плагин не будет обращаться к сервисам. Сохранённые ID остаются в книге.')
@@ -66,10 +68,11 @@ class LiveLibMetadata(Source):
         self.transport = Transport()
         self.litres = LitresProvider(self.transport, self._cover_cache_writer('litres'))
         self.livelib = LiveLibProvider(self.transport, self._cover_cache_writer('livelib'))
+        self.reading = ReadingHistory(self.transport)
         self.fantlab = FantlabProvider(self.transport, self._cover_cache_writer('fantlab'))
         self.covers = CoverService(
             self.cached_source_cover_url,
-            lambda *args, **kwargs: self.identify(*args, **kwargs),
+            lambda *args, **kwargs: self.identify(*args, include_personal=False, **kwargs),
             self.litres, self.livelib, self.fantlab,
             lambda: enabled_sources(self.prefs))
 
@@ -93,11 +96,17 @@ class LiveLibMetadata(Source):
         return id_from_url(url)
 
     def identify(self, log, result_queue, abort, title=None, authors=None,
-                 identifiers=None, timeout=30, enabled=None):
+                 identifiers=None, timeout=30, enabled=None, include_personal=True):
+        enabled = enabled_sources(self.prefs) if enabled is None else enabled
+        username = (self.prefs['livelib_username'] or '').strip()
+        enrich_personal = None
+        if include_personal and username and 'livelib' in enabled:
+            enrich_personal = lambda results, remaining: self.reading.enrich(
+                results, username, log, abort, remaining)
         return identify(self.litres, self.livelib, self.fantlab,
                         self._cover_cache_writer('livelib'), log, result_queue,
                         abort, title, authors, identifiers, timeout,
-                        enabled_sources(self.prefs) if enabled is None else enabled)
+                        enabled, enrich_personal=enrich_personal)
 
     def get_cached_cover_url(self, identifiers):
         return self.covers.get_cached_cover_url(identifiers)

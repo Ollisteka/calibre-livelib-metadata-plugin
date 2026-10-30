@@ -13,7 +13,9 @@ from unittest.mock import Mock
 
 from calibre.customize.zipplugin import loader
 from calibre.utils.logging import Log
-from qt.core import QApplication, QCheckBox
+from calibre.gui2.metadata.basic_widgets import RatingEdit
+from calibre.gui2.metadata.single import MetadataSingleDialogBase
+from qt.core import QApplication, QCheckBox, QLineEdit
 
 
 def main(path, previous_path=None):
@@ -26,11 +28,12 @@ def main(path, previous_path=None):
             del sys.modules[name]
     if previous_path:
         previous = loader.load(previous_path)(None)
-        assert previous.version < (0, 4, 0)
+        assert previous.version < (0, 5, 0)
         assert 'calibre_plugins.livelib_metadata.identifiers' in sys.modules
         # Keep the previous modules loaded, as Preferences -> Load plugin from
         # file does when replacing an installed plugin in a running Calibre.
     plugin = loader.load(path)(None)
+    assert plugin.version == (0, 5, 0)
     assert type(plugin).__module__ == 'calibre_plugins.livelib_metadata'
     # Use an isolated CALIBRE_CONFIG_DIRECTORY when running this script.
     # Exercise Calibre's real generated widget and JSONConfig persistence.
@@ -39,11 +42,18 @@ def main(path, previous_path=None):
     switches = {w.opt.name: w for w in widget.widgets if isinstance(w, QCheckBox)}
     assert set(switches) == {'use_litres', 'use_livelib', 'use_fantlab'}
     assert all(w.isChecked() for w in switches.values())
+    username = next(w for w in widget.widgets if isinstance(w, QLineEdit)
+                    and w.opt.name == 'livelib_username')
+    assert username.text() == ''
+    username.setText('example_reader')
+    assert type(plugin)(None).prefs['livelib_username'] == ''
     switches['use_litres'].setChecked(False)
     # Discarding a widget must not commit its changes.
     assert type(plugin)(None).prefs['use_litres'] is True
     plugin.save_settings(widget)
     assert type(plugin)(None).prefs['use_litres'] is False
+    assert type(plugin)(None).prefs['livelib_username'] == 'example_reader'
+    username.setText('')
     switches['use_litres'].setChecked(True)
     plugin.save_settings(widget)
     plugin.prefs['ignore_fields'] = ['tags']
@@ -90,6 +100,33 @@ def main(path, previous_path=None):
                                      'fantlab': 'work33', 'isbn': '9785170906309'} for mi in found)
         assert all(mi.isbn == '9785170906309' for mi in found)
         assert len(plugin.get_book_urls(found[0].identifiers)) == 3
+    plugin.prefs['livelib_username'] = 'example_reader'
+    plugin.transport.post_form_json = Mock(return_value={
+        'error_code': 0, 'last_page': True,
+        'content': '<div class="brow-h2"><h2>Октябрь 2026 г.</h2></div>'
+                   '<div class="book-item-manage"><a class="brow-book-name" href="/book/22-title">Книга</a>'
+                   '<div class="brow-ratings"><span class="rating-value">4</span></div></div>',
+    })
+    queue = Queue()
+    plugin.identify(log, queue, abort, title='Книга', authors=['Автор'])
+    assert queue.qsize() == 3
+    while not queue.empty():
+        mi = queue.get_nowait()
+        assert mi.rating == 4
+        assert 'Моя оценка LiveLib: 4 / 5' in mi.comments
+        assert 'Дата прочтения LiveLib: Октябрь 2026 г.' in mi.comments
+        assert mi.comments.count('Детали издания LiveLib:') == 1
+        # Exercise Calibre's actual download-to-editor conversion, which
+        # doubles the source's 0..5 rating before storing it in the widget.
+        editor = Mock()
+        editor.focusWidget.return_value = None
+        editor.rating = RatingEdit(None)
+        editor.tags.current_val = []
+        editor.identifiers.current_val = {}
+        MetadataSingleDialogBase.update_from_mi(editor, mi, update_sorts=False)
+        assert editor.rating.current_val == 8  # Four stars, not a clamped five.
+    plugin.transport.post_form_json.assert_called_once()
+    plugin.prefs['livelib_username'] = ''
     downloader = Mock()
     plugin.download_multiple_covers = downloader
     plugin.download_cover(log, Queue(), abort, title='Книга', authors=['Автор'], get_best_cover=True)
@@ -115,7 +152,7 @@ def main(path, previous_path=None):
     assert queue.empty() and len(calls) == before
     other = type(plugin)(None)
     assert other.get_cached_cover_url({'litres': '11'}) is None
-    print('PASS: real Calibre ZIP, native settings widget and persistence, multiple IDs, '
+    print('PASS: real Calibre ZIP, native settings widget and persistence, personal rating/date, multiple IDs, '
           'direct IDs, ISBN enrichment, links, covers, disabled sources, cancellation, isolation')
 
 

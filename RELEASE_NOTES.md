@@ -1,22 +1,14 @@
-# LiveLib Metadata for Calibre v0.4.0
+# LiveLib Metadata for Calibre v0.5.0
 
 Feature release of `LiveLib Metadata`, a Calibre metadata source plugin for Russian-language book libraries.
 
 ## Highlights
 
-- Automatically stores IDs from all matching enabled sources and provides a clickable link to each service.
-- Fills empty metadata fields while preserving populated annotations, tags, ratings, and existing IDs.
-- Adds independent LitRes, LiveLib, and FantLab switches in Calibre's standard source settings. Disabled sources are excluded from metadata and cover requests.
-- Supports direct FantLab work/edition IDs and separates cached covers by source.
-- Retains the author's original search scoring and acceptance thresholds; no additional edition verification is introduced.
-- Fixes missing LitRes covers by offering covers from every matched source (LitRes, LiveLib, FantLab) together.
-- Faster identification: cover bytes are no longer downloaded during identify, and the slow legacy livelib.ru search is skipped when a strong match is already found.
-- Searches LitRes, LiveLib, and FantLab.
-- Uses LiveLib beta pages as the primary Russian metadata fallback.
-- Downloads Russian descriptions, genres, ratings, ISBN, publisher, publication year, and edition details.
-- Adds physical edition details to comments when Calibre has no native field for them.
-- Prefers high-resolution LiveLib covers using `/o/...jpeg` URLs.
-- Falls back to preview covers when an original cover is unavailable.
+- Set **Имя пользователя LiveLib** to import your rating into Calibre and add your rating and read date to **«Детали издания LiveLib»**. Uses your public read shelf and exact edition IDs; reviews and a custom date column are not included yet.
+- Fixes the rating scale passed to Calibre: a personal rating of 4/5 now displays as four stars instead of five.
+- Preserves the read date's original precision, including month-only or year-only dates. Uses the newest shelf entry for repeat readings.
+- Loads reading history in pages, with a five-minute in-memory cache and support for cancellation and lookup time limits.
+- Keeps normal metadata downloads working if the public profile is unavailable. Leaving the username empty or disabling LiveLib turns off personal requests; cover-only downloads skip them.
 
 ## Install
 

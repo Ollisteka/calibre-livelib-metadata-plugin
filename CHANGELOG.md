@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.5.0 - Unreleased
+
+- Fix ratings passed to Calibre's metadata download API: return 0..5 values, since Calibre converts these to its internal 0..10 scale when applying a result. Previously personal ratings such as 4/5 could display as five stars.
+- Add an optional LiveLib username: read personal ratings and reading dates from the public read shelf. Use the personal rating in Calibre and append both values to LiveLib edition details. Preserve date precision; handle pagination, short-lived caching, cancellation, and unavailable profiles. Cover-only lookups skip reading history.
+
 ## v0.4.0 - Unreleased
 
 - Reload the plugin's submodules when replacing an installed ZIP so an update from 0.3.3 does not mix old and new code in a running Calibre.

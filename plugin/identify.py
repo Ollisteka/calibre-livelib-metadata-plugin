@@ -11,7 +11,7 @@ STRONG_MATCH_SCORE = 100
 
 
 def identify(litres, livelib, fantlab, cache_cover, log, result_queue, abort, title=None, authors=None,
-             identifiers=None, timeout=30, enabled=None):
+             identifiers=None, timeout=30, enabled=None, enrich_personal=None):
     """Search enabled providers, enrich results, and emit at most six candidates."""
     identifiers = identifiers or {}
     enabled = frozenset(SOURCE_NAMES if enabled is None else enabled)
@@ -114,12 +114,22 @@ def identify(litres, livelib, fantlab, cache_cover, log, result_queue, abort, ti
         if abort.is_set():
             return
     rows.sort(key=lambda row: row[1].source_relevance)
-    for mi in enrich_results(rows, identifiers, log,
-                             blocked_sources={c.get('source', 'livelib') for c in candidates
-                                              if c not in selected}):
+    # A known ID anchors the lookup. Other hits are donors, not alternative
+    # books to which the user's existing IDs should be attached.
+    results = [mi for mi in enrich_results(rows, identifiers, log,
+                                      blocked_sources={c.get('source', 'livelib') for c in candidates
+                                                       if c not in selected})
+               if not direct_results or any(mi is direct for direct in direct_results)]
+    if enrich_personal is not None and results and not stopped():
+        try:
+            enrich_personal(results, remaining())
+        except Exception as err:
+            log.exception('LiveLib reading history unavailable: %s' % as_unicode(err))
+    for mi in results:
         if abort.is_set():
             return
-        # A known ID anchors the lookup. Other search hits are donors, not
-        # alternative books to which the user's existing IDs should be attached.
-        if not direct_results or any(mi is direct for direct in direct_results):
-            result_queue.put(mi)
+        # Providers use the library's 0..10 scale internally. The metadata
+        # download API expects 0..5; Calibre doubles it when applying a result.
+        if mi.rating is not None:
+            mi.rating /= 2
+        result_queue.put(mi)

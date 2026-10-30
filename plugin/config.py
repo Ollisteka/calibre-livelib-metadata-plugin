@@ -9,6 +9,13 @@ SOURCE_OPTIONS = tuple(
            '. Отключение не удаляет сохранённые идентификаторы.')
     for key, label in zip(SOURCE_NAMES, ('LitRes', 'LiveLib', 'FantLab'))
 )
+PERSONAL_OPTIONS = (
+    Option('livelib_username', 'string', '', 'Имя пользователя LiveLib',
+           'Логин из адреса livelib.ru/reader/логин. Загружать личную оценку '
+           'и дату из публичного списка «Прочитал». Оценка заменяет общий рейтинг '
+           'в поле calibre; оценка и дата также добавляются в детали LiveLib. '
+           'Оставьте пустым, чтобы отключить.'),
+)
 
 
 def enabled_sources(prefs):
