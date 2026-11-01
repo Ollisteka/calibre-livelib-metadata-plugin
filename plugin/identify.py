@@ -25,42 +25,45 @@ def identify(litres, livelib, fantlab, cache_cover, log, result_queue, abort, ti
     def stopped():
         return abort.is_set() or remaining() <= 0
 
-    def search(call, *args, **kwargs):
-        if stopped():
+    def search(call, *args, budget=None, **kwargs):
+        limit = remaining() if budget is None else min(remaining(), budget)
+        if stopped() or limit <= 0:
             return []
         try:
-            return call(*args, timeout=remaining(), **kwargs) or []
+            return call(*args, timeout=limit, **kwargs) or []
         except Exception as err:
             log.exception('Source search failed: %s' % as_unicode(err))
             return []
 
-    def fetch(candidate):
+    def fetch(candidate, budget=None):
         if stopped():
             return None
+        limit = remaining() if budget is None else min(remaining(), budget)
         kind = candidate.get('source', 'livelib')
         if kind == 'litres':
             try:
-                mi = litres.fetch_litres_book(log, candidate, remaining())
+                mi = litres.fetch_litres_book(log, candidate, limit)
             except Exception as err:
                 log.exception('LitRes detail failed for %s: %s' % (candidate.get('id'), as_unicode(err)))
                 mi = litres.metadata_from_litres_candidate(candidate)
         elif kind == 'fantlab':
             if candidate.get('direct'):
                 try:
-                    mi = fantlab.fetch_book(log, candidate['identifier'], remaining())
+                    mi = fantlab.fetch_book(log, candidate['identifier'], limit)
                 except Exception as err:
                     log.exception('FantLab detail failed: %s' % as_unicode(err))
                     mi = fantlab.metadata_from_fantlab_candidate(candidate)
             else:
                 mi = fantlab.metadata_from_fantlab_candidate(candidate)
         else:
-            mi = livelib.complete_candidate(log, candidate, remaining())
+            mi = livelib.complete_candidate(log, candidate, limit)
         if mi is not None:
             mi.source_relevance = -candidate['score']
             rows.append((kind, mi))
         return mi
 
-    for kind in SOURCE_NAMES:
+    direct_pending = [kind for kind in SOURCE_NAMES if kind in enabled and identifiers.get(kind)]
+    for index, kind in enumerate(SOURCE_NAMES):
         if kind not in enabled:
             log.info('Source disabled: %s' % kind)
             continue
@@ -72,7 +75,10 @@ def identify(litres, livelib, fantlab, cache_cover, log, result_queue, abort, ti
                          direct=True)
         if kind == 'livelib':
             candidate['url'] = BETA_BASE_URL + '/book/' + identifier
-        mi = fetch(candidate)
+        # Reserve a share for missing-source searches and details.
+        reserve = int(any(k in enabled and not identifiers.get(k) for k in SOURCE_NAMES))
+        mi = fetch(candidate, budget=remaining() / (len(direct_pending) + reserve))
+        direct_pending.remove(kind)
         if mi is not None:
             direct_results.append(mi)
             if len(direct_results) == 1:
@@ -82,19 +88,27 @@ def identify(litres, livelib, fantlab, cache_cover, log, result_queue, abort, ti
     query = ' '.join([title or ''] + list(authors or [])).strip()
     candidates = []
     if query and not stopped():
-        if 'litres' in enabled and not identifiers.get('litres'):
-            candidates.extend(search(litres.search_litres, log, title, authors, abort=abort))
-        if 'livelib' in enabled and not identifiers.get('livelib'):
-            url = BETA_BASE_URL + '/search?q=' + quote(query)
-            log.info('LiveLib search: ' + url)
-            candidates.extend(search(livelib.search_page, url, title, authors, log=log))
-            # Preserve the author's strong-match threshold for legacy escalation.
-            if not any(c['score'] >= STRONG_MATCH_SCORE for c in candidates):
-                url = BASE_URL + '/find/' + quote(query)
-                log.info('LiveLib search: ' + url)
-                candidates.extend(search(livelib.search_page, url, title, authors, log=log))
-        if 'fantlab' in enabled and not identifiers.get('fantlab'):
-            candidates.extend(search(fantlab.search_fantlab, log, title, authors))
+        pending = [kind for kind in SOURCE_NAMES if kind in enabled and not identifiers.get(kind)]
+        for index, kind in enumerate(pending):
+            if stopped():
+                break
+            # One share per remaining source, plus a share for book details.
+            # Fast searches leave their unused time available to later work.
+            budget = remaining() / (len(pending) - index + 1)
+            if kind == 'litres':
+                candidates.extend(search(litres.search_litres, log, title, authors, budget=budget, abort=abort))
+            elif kind == 'livelib':
+                source_deadline = monotonic() + budget
+                url = BETA_BASE_URL + '/search?q=' + quote(query)
+                candidates.extend(search(livelib.search_page, url, title, authors,
+                                         budget=budget / 2, log=log))
+                # Preserve the strong-match threshold for legacy escalation.
+                if not any(c['score'] >= STRONG_MATCH_SCORE for c in candidates):
+                    url = BASE_URL + '/find/' + quote(query)
+                    candidates.extend(search(livelib.search_page, url, title, authors,
+                                             budget=source_deadline - monotonic(), log=log))
+            else:
+                candidates.extend(search(fantlab.search_fantlab, log, title, authors, budget=budget))
         candidates.sort(key=lambda row: row['score'], reverse=True)
 
     # Reserve a slot for each source before filling the six-result budget, so a
@@ -109,8 +123,8 @@ def identify(litres, livelib, fantlab, cache_cover, log, result_queue, abort, ti
             selected.append(candidate)
     selected = selected[:max(0, 6 - len(rows))]
     selected.sort(key=lambda row: row['score'], reverse=True)
-    for candidate in selected:
-        fetch(candidate)
+    for index, candidate in enumerate(selected):
+        fetch(candidate, budget=remaining() / (len(selected) - index))
         if abort.is_set():
             return
     rows.sort(key=lambda row: row[1].source_relevance)

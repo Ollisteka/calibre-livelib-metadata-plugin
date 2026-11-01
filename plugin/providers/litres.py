@@ -8,6 +8,7 @@ from calibre import as_unicode
 from calibre.ebooks.metadata.book.base import Metadata
 from urllib.parse import quote
 from urllib.parse import urlencode
+from time import monotonic
 
 
 class LitresProvider:
@@ -31,6 +32,7 @@ class LitresProvider:
         return cover_url
 
     def search_litres(self, log, query_title, query_authors, timeout, abort=None):
+        deadline = monotonic() + timeout
         queries = []
         if query_title:
             queries.append(' '.join([query_title] + list(query_authors or [])).strip())
@@ -38,7 +40,8 @@ class LitresProvider:
         candidates = []
         seen = set()
         for query in [q for q in queries if q]:
-            if abort is not None and abort.is_set():
+            remaining = deadline - monotonic()
+            if remaining <= 0 or (abort is not None and abort.is_set()):
                 break
             params = [
                 ('q', query), ('limit', '10'), ('offset', '0'),
@@ -50,7 +53,7 @@ class LitresProvider:
             url = LITRES_API_BASE + '/search?' + urlencode(params)
             log.info('LitRes search: ' + url)
             try:
-                payload = self.transport.fetch_litres_json(url, timeout).get('payload') or {}
+                payload = self.transport.fetch_litres_json(url, remaining).get('payload') or {}
             except Exception as err:
                 log.exception('LitRes search failed: %s' % as_unicode(err))
                 continue

@@ -134,6 +134,8 @@ class LiveLibProvider:
         return mi
 
     def search_page(self, url, title, authors, timeout, log=None):
+        if log is not None:
+            log.info('LiveLib search: ' + url)
         try:
             raw = self.transport.fetch_livelib_text(url, timeout)
         except Exception as err:

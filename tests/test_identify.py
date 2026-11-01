@@ -51,7 +51,7 @@ def test_direct_litres_id_also_searches_missing_sources(source, monkeypatch, sea
     assert found[0].identifiers == {'litres': '123'}
     assert (found[0].title, found[0].authors, found[0].language) == ('Подробное', ['Автор'], 'rus')
     assert found[0].source_relevance == -1000
-    fetch.assert_called_once_with('https://api.litres.ru/foundation/api/arts/123', 30)
+    fetch.assert_called_once_with('https://api.litres.ru/foundation/api/arts/123', 15)
     searches['search_litres'].assert_not_called()
     searches['search_fantlab'].assert_called_once()
 
@@ -67,7 +67,7 @@ def test_direct_livelib_id_detail_error_also_searches_missing_sources(
     assert (found[0].title, found[0].authors, found[0].language) == ('Книга', ['Автор'], 'rus')
     assert found[0].comments is None
     assert found[0].source_relevance == -1000
-    fetch.assert_called_once_with(log, 'https://beta.livelib.ru/book/123', 30)
+    fetch.assert_called_once_with(log, 'https://beta.livelib.ru/book/123', 15)
     searches['search_litres'].assert_called_once()
     searches['search_fantlab'].assert_called_once()
     searches['fetch_url'].assert_not_called()
