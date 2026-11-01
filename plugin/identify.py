@@ -134,6 +134,11 @@ def identify(litres, livelib, fantlab, cache_cover, log, result_queue, abort, ti
                                       blocked_sources={c.get('source', 'livelib') for c in candidates
                                                        if c not in selected})
                if not direct_results or any(mi is direct for direct in direct_results)]
+    if enrich_personal is not None:
+        # In personal mode, aggregate ratings must never stand in for the
+        # reader's own rating, even if the shelf lookup fails or times out.
+        for mi in results:
+            mi.rating = None
     if enrich_personal is not None and results and not stopped():
         try:
             enrich_personal(results, remaining())

@@ -75,8 +75,9 @@ With a LiveLib username set, the plugin additionally reads that user's **public 
 For an exact LiveLib edition ID, the personal rating overrides the result's service rating
 (4/5 appears as four stars; Calibre stores it as 8/10 internally). Both the personal rating and read date are appended to the
 comments, including results whose description comes from another source. This is an explicit
-exception to the general enrichment rule above. If no personal rating is available, the service
-rating remains. Ensure **Rating** and **Comments** are enabled in Calibre's downloaded fields.
+exception to the general enrichment rule above. If no personal rating is available (including lookup errors or timeouts), the plugin
+returns no rating in personal mode. How that affects an existing library rating depends on
+Calibre's application of downloaded metadata. Ensure **Rating** and **Comments** are enabled in Calibre's downloaded fields.
 
 Dates keep the precision LiveLib provides, such as `Октябрь 2026 г.`; a day is never invented.
 For repeat readings, the first (newest) shelf entry is used. Different editions are not matched

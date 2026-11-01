@@ -1,3 +1,4 @@
+import importlib
 import json
 from types import SimpleNamespace
 from unittest.mock import Mock
@@ -173,7 +174,7 @@ def test_personal_requests_are_opt_in(source, monkeypatch, log, results, abort, 
 
 @pytest.mark.parametrize('response', [OSError('private profile'), page(book('999')),
                                     page(HEADING + book('2', None))])
-def test_personal_failure_or_missing_rating_keeps_public_rating(
+def test_personal_failure_or_missing_rating_does_not_use_public_rating(
         source, monkeypatch, log, results, abort, response):
     setup_sources(source, monkeypatch)
     original = source.litres.fetch_litres_book
@@ -187,8 +188,64 @@ def test_personal_failure_or_missing_rating_keeps_public_rating(
     monkeypatch.setattr(source.transport, 'post_form_json', post)
     source.identify(log, results, abort, identifiers={'litres': '1'})
     mi = results.get_nowait()
-    assert mi.rating == 4.5
+    assert mi.rating is None
     assert 'Моя оценка LiveLib:' not in mi.comments
+
+
+@pytest.mark.parametrize('failure', ['unread', 'unrated', 'exception', 'deadline'])
+def test_personal_mode_never_exports_aggregate_ratings(
+        source, monkeypatch, log, results, abort, failure):
+    setup_sources(source, monkeypatch)
+    original = source.litres.fetch_litres_book
+    now = [0]
+    monkeypatch.setattr(importlib.import_module('plugin_under_test.identify'),
+                        'monotonic', lambda: now[0])
+
+    def rated(*args):
+        mi = original(*args)
+        mi.rating = 10
+        return mi
+
+    monkeypatch.setattr(source.litres, 'fetch_litres_book', rated)
+    original_fantlab = source.fantlab.metadata_from_fantlab_candidate
+
+    def last_result(*args):
+        mi = original_fantlab(*args)
+        if failure == 'deadline':
+            now[0] = 31
+        return mi
+
+    monkeypatch.setattr(source.fantlab, 'metadata_from_fantlab_candidate', last_result)
+    source.prefs['livelib_username'] = 'reader'
+    if failure == 'exception':
+        monkeypatch.setattr(source.reading, 'enrich', Mock(side_effect=OSError('offline')))
+    post = Mock(return_value=page(
+        HEADING + book('2', None) if failure == 'unrated' else book('999')))
+    monkeypatch.setattr(source.transport, 'post_form_json', post)
+    source.identify(log, results, abort, title='Книга', authors=['Автор'])
+    assert results.qsize() == 3
+    while not results.empty():
+        mi = results.get_nowait()
+        assert mi.rating is None
+        assert 'Моя оценка LiveLib:' not in mi.comments
+        if failure == 'unrated':
+            assert 'Дата прочтения LiveLib: Октябрь 2026 г.' in mi.comments
+
+
+def test_public_mode_still_exports_aggregate_rating(source, monkeypatch, log, results, abort):
+    setup_sources(source, monkeypatch)
+    original = source.litres.fetch_litres_book
+
+    def rated(*args):
+        mi = original(*args)
+        mi.rating = 9
+        return mi
+
+    monkeypatch.setattr(source.litres, 'fetch_litres_book', rated)
+    source.identify(log, results, abort, title='Книга', authors=['Автор'])
+    assert results.qsize() == 3
+    while not results.empty():
+        assert results.get_nowait().rating == 4.5
 
 
 def test_post_form_transport(source, monkeypatch):
