@@ -76,6 +76,10 @@ class LiveLibMetadata(Source):
             self.litres, self.livelib, self.fantlab,
             lambda: enabled_sources(self.prefs))
 
+    def create_reading_history(self):
+        """Independent shelf cache and transport for companion actions."""
+        return ReadingHistory(Transport())
+
     def _cover_cache_writer(self, source):
         return lambda identifier, url: self.cache_identifier_to_cover_url(
             source + ':' + str(identifier), url)
