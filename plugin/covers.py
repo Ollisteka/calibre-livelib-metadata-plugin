@@ -85,7 +85,8 @@ class CoverService:
                 urls.append(url)
 
         add(self.get_cached_cover_url(identifiers))
-        if title or authors:
+        direct_id = any((identifiers or {}).get(key) for key in (IDENTIFIER_TYPE_LITRES, IDENTIFIER_TYPE_LIVELIB))
+        if title or authors or (direct_id and not urls):
             q = Queue()
             self.identify(log, q, abort, title=title, authors=authors,
                           identifiers=identifiers, timeout=timeout)

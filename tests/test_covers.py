@@ -109,3 +109,17 @@ def test_same_numeric_id_keeps_both_source_covers(source, monkeypatch, log, abor
         'https://cdn.litres.ru/pub/c/cover_415/123', 'https://cover/B']
     assert source.get_cached_cover_url({'litres': '123'}).endswith('/123')
     assert source.get_cached_cover_url({'livelib': '123'}) == 'https://cover/B'
+
+
+@pytest.mark.parametrize('kind', ['litres', 'livelib'])
+def test_cold_cache_direct_id(source, monkeypatch, log, abort, kind):
+    def identify(log, queue, abort, **kwargs):
+        assert kwargs['identifiers'] == {kind: '123'}
+        getattr(source, kind).cache_cover('123', 'https://cover/direct')
+        mi = calibre_metadata.Metadata('Book', [])
+        mi.set_identifier(kind, '123')
+        queue.put(mi)
+    lookup = Mock(side_effect=identify)
+    monkeypatch.setattr(source, 'identify', lookup)
+    assert source.covers.find_all_cover_urls(log, abort, None, None, {kind: '123'}, 7) == ['https://cover/direct']
+    lookup.assert_called_once()
