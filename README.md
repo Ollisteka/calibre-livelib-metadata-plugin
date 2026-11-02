@@ -59,45 +59,21 @@ matching IDs and missing metadata rather than unrelated alternative books.
 ## Source settings
 
 Open **Preferences → Metadata download**, select **LiveLib Metadata**, and click
-**Configure selected source**. Calibre's standard configuration dialog provides:
+**Configure selected source**.
 
-- **Использовать LitRes**
-- **Использовать LiveLib**
-- **Использовать FantLab**
-- **Имя пользователя LiveLib** — optional login from `livelib.ru/reader/LOGIN` (not the full URL).
+- **Sources:** LitRes, LiveLib, and FantLab are enabled by default. Uncheck any source
+  you don't want to use for metadata or covers.
+- **Имя пользователя LiveLib** (optional): enter your username — the `LOGIN` part of
+  `livelib.ru/reader/LOGIN` — to import your personal rating and read date from your public
+  **«Прочитал»** shelf. No password is needed. Leave it blank to use regular book ratings.
+- **Fields:** enable **Rating** and **Comments** to receive your personal rating and
+  reading details. The read date appears in the book's comments.
 
-All three are enabled by default. Disabling a source prevents searches, direct ID lookups,
-fallback requests, and cover downloads from that source, including cached covers. Existing IDs
-and their clickable book links remain available. Disabling all sources is allowed and makes
-the plugin perform no network requests.
+Reading history requires LiveLib to be enabled and matches the exact book edition.
+If no personal rating is found, the plugin returns no rating. For large shelves, you may
+need to download metadata again to find your reading details.
 
-Settings are saved in the Calibre profile and shared across its libraries. Saved changes apply
-to subsequent operations. The standard selection of metadata fields remains in the same dialog.
-
-Enrichment does not replace populated annotations, ratings, tags, or other fields in a plugin
-result. It does not append extra tags or edition details to populated comments. Applying a result
-to an existing library record still follows Calibre's metadata download settings.
-
-With a LiveLib username set, the plugin additionally reads that user's **public «Прочитал» shelf**.
-For an exact LiveLib edition ID, the personal rating overrides the result's service rating
-(4/5 appears as four stars; Calibre stores it as 8/10 internally). Both the personal rating and read date are appended to the
-comments, including results whose description comes from another source. This is an explicit
-exception to the general enrichment rule above. If no personal rating is available (including lookup errors or timeouts), the plugin
-returns no rating in personal mode. How that affects an existing library rating depends on
-Calibre's application of downloaded metadata. Ensure **Rating** and **Comments** are enabled in Calibre's downloaded fields.
-
-Dates keep the precision LiveLib provides, such as `Октябрь 2026 г.`; a day is never invented.
-For repeat readings, the first (newest) shelf entry is used. Different editions are not matched
-by title. There is no custom read-date column yet. Personal reviews/impressions are not imported:
-the biglist response contains the publisher's annotation, which is not a personal review.
-
-Leave the username empty to disable personal requests. Disabling LiveLib also disables this
-feature; cover-only downloads do not request reading history. No password or login is required.
-Private/unavailable profiles and network errors do not prevent normal metadata downloads.
-The shelf is scanned in pages of 100 within the remaining lookup time. An incomplete scan resumes
-on a subsequent lookup in the same plugin instance; the in-memory cache expires after five minutes
-and resets when the username changes. Large shelves may require another lookup. The approach uses
-the public endpoint described in [livelib-backup](https://github.com/Chimildic/livelib-backup/blob/main/src/gs/livelib-client.js).
+Settings apply to all libraries in your Calibre profile.
 
 ---
 
