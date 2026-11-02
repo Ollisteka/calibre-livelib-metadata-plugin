@@ -46,6 +46,13 @@ an ID from another service:
 5. **FantLab** public API search, if its ID is missing.
 
 Skipping the slow legacy LiveLib search on a strong match keeps a typical lookup fast.
+LitRes automatically prefers text and paper editions over audio editions with the same
+normalized title and authors. Matching audio candidates are removed before fetching details,
+selecting covers, and merging metadata, so they cannot cause an ambiguous LitRes ID.
+If only audio editions are found for a book, they remain available as fallback results.
+This requires no setting. An explicit `litres:ID` is always fetched directly, including an
+audiobook ID. Multiple non-audio editions remain separate candidates; ambiguous IDs are
+still not borrowed when enriching another source's result.
 When a known ID resolves to a result, that result anchors the lookup; other sources supply
 matching IDs and missing metadata rather than unrelated alternative books.
 

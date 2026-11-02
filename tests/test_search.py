@@ -21,7 +21,7 @@ def test_litres_combines_queries_sorts_and_deduplicates(source, monkeypatch, log
     monkeypatch.setattr(source.transport, 'fetch_litres_json', fetch)
     found = source.litres.search_litres(log, 'Книга', ['Автор'], 7)
     # Exact title + author = 140; audio loses 20; accepted results get +5.
-    assert [(c['id'], c['score']) for c in found] == [('2', 145), ('1', 125)]
+    assert [(c['id'], c['score']) for c in found] == [('2', 145)]
     queries = [parse_qs(urlsplit(call.args[0]).query)['q'] for call in fetch.call_args_list]
     assert queries == [['Книга Автор'], ['Книга']]
 
@@ -80,6 +80,58 @@ def test_litres_no_title(source, monkeypatch, log):
     monkeypatch.setattr(source.transport, 'fetch_litres_json', fetch)
     assert source.litres.search_litres(log, None, ['Автор'], 7) == []
     fetch.assert_not_called()
+
+
+@pytest.mark.parametrize('audio_fields', [
+    {'art_type': 4}, {'art_type': '4'}, {'art_type': 10},
+    {'url': '/audiobook/1'}, {'url': '/podcast/1'},
+])
+def test_litres_prefers_non_audio_across_queries(source, monkeypatch, log, audio_fields):
+    monkeypatch.setattr(source.transport, 'fetch_litres_json', Mock(side_effect=[
+        {'payload': {'data': [litres_item(1, **audio_fields)]}},
+        {'payload': {'data': [litres_item(2, title='КНИГА'), litres_item(3)]}},
+    ]))
+    found = source.litres.search_litres(log, 'Книга', ['Автор'], 7)
+    # Preserve both non-audio editions: their ambiguity must not be guessed away.
+    assert {c['id'] for c in found} == {'2', '3'}
+
+
+def test_litres_other_author_does_not_suppress_audio(source, monkeypatch, log):
+    monkeypatch.setattr(source.transport, 'fetch_litres_json', Mock(return_value={
+        'payload': {'data': [litres_item(1, art_type=4), litres_item(2, author='Другой')]}}))
+    assert {c['id'] for c in source.litres.search_litres(log, 'Книга', [], 7)} == {'1', '2'}
+
+
+def test_litres_audio_filter_allows_enrichment(source, monkeypatch, log, results, abort):
+    from calibre.ebooks.metadata.book.base import Metadata
+
+    def fetch(url, timeout):
+        if '/search?' in url:
+            return {'payload': {'data': [litres_item(48856068), litres_item(57352763, art_type=4)]}}
+        assert url.endswith('/arts/48856068')
+        return {'payload': litres_item(48856068)}
+
+    monkeypatch.setattr(source.transport, 'fetch_litres_json', fetch)
+    monkeypatch.setattr(source.livelib, 'search_page', Mock(return_value=[{
+        'source': 'livelib', 'score': 148, 'title': 'Книга', 'author': 'Автор',
+        'url': 'https://beta.livelib.ru/book/2'}]))
+    mi = Metadata('Книга', ['Автор'])
+    mi.set_identifier('livelib', '2')
+    monkeypatch.setattr(source.livelib, 'complete_candidate', Mock(return_value=mi))
+    source.identify(log, results, abort, title='Книга', authors=['Автор'],
+                    enabled={'litres', 'livelib'})
+    assert results.qsize() == 2
+    while not results.empty():
+        assert results.get_nowait().identifiers == {'litres': '48856068', 'livelib': '2'}
+
+
+def test_explicit_litres_audio_id_is_preserved(source, monkeypatch, log, results, abort):
+    fetch = Mock(return_value={'payload': litres_item(57352763, art_type=4)})
+    monkeypatch.setattr(source.transport, 'fetch_litres_json', fetch)
+    source.identify(log, results, abort, identifiers={'litres': '57352763'}, enabled={'litres'})
+    assert results.get_nowait().identifiers == {'litres': '57352763'}
+    assert fetch.call_count == 1
+    assert fetch.call_args.args[0].endswith('/arts/57352763')
 
 
 def test_litres_search_error_continues(source, monkeypatch, log):
