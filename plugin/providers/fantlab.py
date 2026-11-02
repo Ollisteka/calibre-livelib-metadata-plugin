@@ -6,7 +6,6 @@ from ..matching import score_match
 from calibre import as_unicode
 from calibre.ebooks.metadata.book.base import Metadata
 from urllib.parse import quote
-import json
 import re
 from urllib.parse import urljoin
 

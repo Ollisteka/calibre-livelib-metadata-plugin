@@ -1,6 +1,5 @@
 from .config import SOURCE_NAMES
 from .constants import BASE_URL, BETA_BASE_URL
-from .identifiers import livelib_id_from_url
 from .merging import enrich_results, missing
 from calibre import as_unicode
 from time import monotonic
@@ -10,7 +9,7 @@ from urllib.parse import quote
 STRONG_MATCH_SCORE = 100
 
 
-def identify(litres, livelib, fantlab, cache_cover, log, result_queue, abort, title=None, authors=None,
+def identify(litres, livelib, fantlab, log, result_queue, abort, title=None, authors=None,
              identifiers=None, timeout=30, enabled=None, enrich_personal=None):
     """Search enabled providers, enrich results, and emit at most six candidates."""
     identifiers = identifiers or {}
@@ -63,7 +62,7 @@ def identify(litres, livelib, fantlab, cache_cover, log, result_queue, abort, ti
         return mi
 
     direct_pending = [kind for kind in SOURCE_NAMES if kind in enabled and identifiers.get(kind)]
-    for index, kind in enumerate(SOURCE_NAMES):
+    for kind in SOURCE_NAMES:
         if kind not in enabled:
             log.info('Source disabled: %s' % kind)
             continue

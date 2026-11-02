@@ -104,7 +104,7 @@ class LiveLibMetadata(Source):
             enrich_personal = lambda results, remaining: self.reading.enrich(
                 results, username, log, abort, remaining)
         return identify(self.litres, self.livelib, self.fantlab,
-                        self._cover_cache_writer('livelib'), log, result_queue,
+                        log, result_queue,
                         abort, title, authors, identifiers, timeout,
                         enabled, enrich_personal=enrich_personal)
 

@@ -257,7 +257,8 @@ def test_post_form_transport(source, monkeypatch):
         assert headers['content-type'] == 'application/x-www-form-urlencoded'
         assert 'accept-version' not in headers
         assert timeout == 7
-        return SimpleNamespace(read=lambda: json.dumps(page('')).encode())
+        from contextlib import closing
+        return closing(SimpleNamespace(read=lambda: json.dumps(page('')).encode(), close=lambda: None))
     monkeypatch.setattr(transport, 'urlopen', open_request)
     assert source.transport.post_form_json('https://www.livelib.ru/reader/test/read/listview/biglist',
                                           {'page_no': 2, 'per_page': 100}, 7) == page('')

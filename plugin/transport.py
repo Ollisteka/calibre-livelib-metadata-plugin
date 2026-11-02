@@ -21,7 +21,8 @@ class Transport:
             'Referer': BASE_URL + '/',
         }
         request = Request(url, data=urlencode(fields).encode('utf-8'), headers=headers)
-        raw = urlopen(request, timeout=timeout).read()
+        with urlopen(request, timeout=timeout) as response:
+            raw = response.read()
         return json.loads(raw.decode('utf-8', 'replace') if isinstance(raw, bytes) else raw)
 
     def _read(self, url, timeout, headers):
