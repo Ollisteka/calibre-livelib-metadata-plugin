@@ -13,6 +13,23 @@ import json
 import re
 
 
+def image_url(image):
+    """Extract a URL from a JSON-LD image string, ImageObject, or list."""
+    if isinstance(image, str):
+        return image.strip() or None
+    if isinstance(image, dict):
+        for key in ('contentUrl', 'url'):
+            value = image.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    if isinstance(image, list):
+        for item in image:
+            url = image_url(item)
+            if url:
+                return url
+    return None
+
+
 def decode_next_payload(raw):
     cleaned = clean_html(raw)
     chunks = []

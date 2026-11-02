@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.4
+
+- Fix LiveLib cover downloads crashing when JSON-LD `image` is an ImageObject instead of a URL string.
+- Extract `contentUrl` or `url`, support image lists, and ignore missing or malformed image values before caching.
+- Add regression coverage from direct LiveLib lookup through the cover downloader handoff.
+
 ## v0.3.3 - 2026-07-09
 
 - Fix missing LitRes covers: `download_cover` now aggregates covers from every matched source (LitRes, LiveLib, FantLab) instead of only the single top-scoring result.

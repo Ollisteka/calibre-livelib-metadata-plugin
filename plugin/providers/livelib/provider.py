@@ -4,6 +4,7 @@ from ...identifiers import livelib_id_from_url
 from .formatting import append_edition_details
 from .parsers import extract_livelib_json
 from .parsers import extract_livelib_page_details
+from .parsers import image_url
 from .parsers import parse_search_results
 from calibre import as_unicode
 from calibre.ebooks.metadata import check_isbn
@@ -125,7 +126,7 @@ class LiveLibProvider:
 
         mi.comments = append_edition_details(comments, details, rating_count=rating_count)
 
-        image = data.get('image')
+        image = image_url(data.get('image'))
         if image and livelib_id:
             self.cache_cover(livelib_id, image)
             mi.has_cover = True

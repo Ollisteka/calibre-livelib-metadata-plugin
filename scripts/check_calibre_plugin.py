@@ -32,7 +32,8 @@ def main(path):
     calls = []
     book = {'@type': 'Book', 'name': 'Книга', 'author': {'name': 'Автор'},
             'isbn': '9785170906309', 'description': 'Аннотация',
-            'image': 'https://s1.livelib.ru/boocover/22/200x300/ab/cover.jpg'}
+            'image': {'@type': 'ImageObject',
+                      'url': 'https://s1.livelib.ru/boocover/22/200x300/ab/cover.jpg'}}
     card = '<script type="application/ld+json">%s</script>' % json.dumps(book)
     search = '<div><a href="/book/22">Книга</a><a href="/author/1">Автор</a></div>'
     def text(url, timeout):

@@ -1,13 +1,41 @@
 from calibre.ebooks.metadata.book import base as calibre_metadata
 from plugin_under_test import covers
+from plugin_under_test.providers.livelib import provider
 
 from unittest.mock import Mock
 
 import pytest
+import json
 
 
 PREVIEW = 'https://s1.livelib.ru/boocover/123/200x300/ab/cover.jpg'
 ORIGINAL = 'https://s1.livelib.ru/boocover/123/o/ab/cover.jpeg'
+
+
+@pytest.mark.parametrize('image, expected', [
+    (PREVIEW, PREVIEW),
+    ({'@type': 'ImageObject', 'url': PREVIEW}, PREVIEW),
+    ({'contentUrl': ORIGINAL, 'url': PREVIEW}, ORIGINAL),
+    ({'contentUrl': {}, 'url': PREVIEW}, PREVIEW),
+    ([{}, None, {'url': PREVIEW}], PREVIEW),
+    ('  ' + PREVIEW + '  ', PREVIEW),
+    ({'url': {}}, None), ([], None), (None, None), (42, None), (' ', None),
+])
+def test_livelib_page_image_download(source, monkeypatch, log, abort, results, image, expected):
+    monkeypatch.setattr(provider, 'check_isbn', lambda value: None)
+    book = {'@type': 'Book', 'name': 'Маленькие тролли и большое наводнение',
+            'author': {'name': 'Туве Янссон'}, 'image': image}
+    raw = '<script type="application/ld+json">%s</script>' % json.dumps(book)
+    monkeypatch.setattr(source.transport, 'fetch_livelib_text', Mock(return_value=raw))
+    downloader = Mock()
+    monkeypatch.setattr(source, 'download_multiple_covers', downloader)
+    identifiers = {'livelib': '1002874255'}
+    source.download_cover(log, results, abort, identifiers=identifiers)
+    assert source.get_cached_cover_url(identifiers) == expected
+    if expected:
+        assert downloader.call_args.args[2] == covers.livelib_cover_candidates(expected)
+    else:
+        downloader.assert_not_called()
 
 
 @pytest.mark.parametrize('url, original, candidates', [
