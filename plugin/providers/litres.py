@@ -30,7 +30,7 @@ class LitresProvider:
             return LITRES_WEB_BASE + cover_url
         return cover_url
 
-    def search_litres(self, log, query_title, query_authors, timeout):
+    def search_litres(self, log, query_title, query_authors, timeout, abort=None):
         queries = []
         if query_title:
             queries.append(' '.join([query_title] + list(query_authors or [])).strip())
@@ -38,6 +38,8 @@ class LitresProvider:
         candidates = []
         seen = set()
         for query in [q for q in queries if q]:
+            if abort is not None and abort.is_set():
+                break
             params = [
                 ('q', query), ('limit', '10'), ('offset', '0'),
                 ('is_for_pda', 'false'), ('o', 'popular'),

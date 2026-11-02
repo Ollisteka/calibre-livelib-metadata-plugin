@@ -177,7 +177,7 @@ def test_cancelled_direct_lookup(source, monkeypatch, searches, log, results, ab
 
 
 def test_cancellation_after_search_before_details(source, monkeypatch, searches, log, results, abort):
-    def search(*args):
+    def search(*args, **kwargs):
         abort.set()
         return [candidate('litres', 1)]
     searches['search_litres'].side_effect = search
@@ -186,3 +186,30 @@ def test_cancellation_after_search_before_details(source, monkeypatch, searches,
     source.identify(log, results, abort, title='Книга')
     fetch.assert_not_called()
     assert results.empty()
+
+
+def test_cancelled_search_never_calls_providers(source, searches, log, results, abort):
+    abort.set()
+    source.identify(log, results, abort, title='Book')
+    for search in searches.values():
+        search.assert_not_called()
+
+
+def test_cancel_during_litres_stops_following_requests(source, monkeypatch, searches, log, results, abort):
+    def search(*args, **kwargs):
+        abort.set()
+        return []
+    searches['search_litres'].side_effect = search
+    source.identify(log, results, abort, title='Book')
+    searches['fetch_livelib_text'].assert_not_called()
+    searches['search_fantlab'].assert_not_called()
+
+
+def test_cancel_between_litres_queries(source, monkeypatch, log, abort):
+    def fetch(*args):
+        abort.set()
+        return {}
+    fetch = Mock(side_effect=fetch)
+    monkeypatch.setattr(source.transport, 'fetch_litres_json', fetch)
+    source.litres.search_litres(log, 'Book', ['Author'], 7, abort=abort)
+    fetch.assert_called_once()

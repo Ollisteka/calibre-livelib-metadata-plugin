@@ -53,8 +53,10 @@ class CoverService:
             return self.cached_cover('fantlab:' + fantlab_id)
         return None
 
-    def find_cover_url_direct(self, log, title=None, authors=None, timeout=30):
-        for candidate in self.litres.search_litres(log, title, authors, timeout):
+    def find_cover_url_direct(self, log, title=None, authors=None, timeout=30, abort=None):
+        if abort is not None and abort.is_set():
+            return None
+        for candidate in self.litres.search_litres(log, title, authors, timeout, abort=abort):
             if candidate.get('cover_url'):
                 return candidate['cover_url']
         query = ' '.join([title or ''] + list(authors or [])).strip()
@@ -63,12 +65,16 @@ class CoverService:
                     BETA_BASE_URL + '/search?q=' + quote(query),
                     BASE_URL + '/find/' + quote(query),
             ):
+                if abort is not None and abort.is_set():
+                    return None
                 try:
                     for candidate in self.livelib.search_page(url, title, authors, timeout):
                         if candidate.get('cover_url'):
                             return candidate['cover_url']
                 except Exception as err:
                     log.exception('Direct LiveLib cover search failed: %s' % as_unicode(err))
+        if abort is not None and abort.is_set():
+            return None
         for candidate in self.fantlab.search_fantlab(log, title, authors, timeout):
             if candidate.get('cover_url'):
                 return candidate['cover_url']
@@ -76,6 +82,8 @@ class CoverService:
 
     def find_all_cover_urls(self, log, abort, title, authors, identifiers, timeout):
         """Collect cached covers of returned candidates, ordered by relevance."""
+        if abort.is_set():
+            return []
         urls = []
         seen = set()
 
@@ -98,8 +106,8 @@ class CoverService:
                 except Empty:
                     break
                 add(self.get_cached_cover_url(mi.identifiers))
-        if not urls and (title or authors):
-            add(self.find_cover_url_direct(log, title=title, authors=authors, timeout=timeout))
+        if not urls and (title or authors) and not abort.is_set():
+            add(self.find_cover_url_direct(log, title=title, authors=authors, timeout=timeout, abort=abort))
         return urls
 
 

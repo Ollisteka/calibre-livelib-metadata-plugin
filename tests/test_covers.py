@@ -70,7 +70,7 @@ def test_cover_direct_fallback(source, monkeypatch, log, abort):
     direct = Mock(return_value='https://cover/direct')
     monkeypatch.setattr(source.covers, 'find_cover_url_direct', direct)
     assert source.covers.find_all_cover_urls(log, abort, 'Книга', [], {}, 7) == ['https://cover/direct']
-    direct.assert_called_once_with(log, title='Книга', authors=[], timeout=7)
+    direct.assert_called_once_with(log, title='Книга', authors=[], timeout=7, abort=abort)
 
 
 def test_no_cover_query(source, monkeypatch, log, abort):
@@ -123,3 +123,20 @@ def test_cold_cache_direct_id(source, monkeypatch, log, abort, kind):
     monkeypatch.setattr(source, 'identify', lookup)
     assert source.covers.find_all_cover_urls(log, abort, None, None, {kind: '123'}, 7) == ['https://cover/direct']
     lookup.assert_called_once()
+
+
+def test_cancelled_identify_does_not_start_cover_fallback(source, monkeypatch, log, abort):
+    monkeypatch.setattr(source, 'identify', lambda *args, **kwargs: abort.set())
+    direct = Mock()
+    monkeypatch.setattr(source.covers, 'find_cover_url_direct', direct)
+    assert source.covers.find_all_cover_urls(log, abort, 'Book', [], {}, 7) == []
+    direct.assert_not_called()
+
+
+def test_cancelled_cover_request_never_searches(source, monkeypatch, log, abort):
+    abort.set()
+    search = Mock()
+    monkeypatch.setattr(source.litres, 'search_litres', search)
+    assert source.covers.find_all_cover_urls(log, abort, 'Book', [], {}, 7) == []
+    assert source.covers.find_cover_url_direct(log, title='Book', abort=abort) is None
+    search.assert_not_called()
