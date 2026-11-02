@@ -146,11 +146,20 @@ def test_detail_error_preserves_candidate_metadata_and_caches_cover(
     details.assert_called_once_with(log, row if kind == 'litres' else row['url'], 7)
 
 
-def test_missing_detail_is_skipped(source, monkeypatch, searches, log, results, abort):
-    searches['parse_search_results'].return_value = [candidate('livelib', 1)]
-    monkeypatch.setattr(source.livelib, 'fetch_book', Mock(return_value=None))
-    source.identify(log, results, abort, title='Книга')
-    assert results.empty()
+@pytest.mark.parametrize('title', ['Book', ''])
+def test_missing_detail_uses_search_candidate(source, monkeypatch, searches, log, results, abort, title):
+    row = candidate('livelib', 1)
+    row['title'] = title
+    searches['parse_search_results'].return_value = [row]
+    # A real page without Book JSON-LD yields None from fetch_book.
+    source.identify(log, results, abort, title='Book')
+    if not title:
+        assert results.empty()
+    else:
+        mi = results.get_nowait()
+        assert mi.title == title
+        assert mi.has_cover
+        assert source.get_cached_cover_url(mi.identifiers) == 'https://cover/1'
 
 
 def test_search_failures_allow_other_sources(source, searches, log, results, abort):

@@ -49,6 +49,8 @@ class LiveLibProvider:
             mi = self.fetch_book(log, candidate['url'], timeout)
         except Exception as err:
             log.exception('LiveLib detail failed for %s: %s' % (candidate['url'], as_unicode(err)))
+            mi = None
+        if mi is None:
             mi = self.metadata_from_search_candidate(candidate)
         if mi is not None and candidate.get('cover_url'):
             livelib_id = (mi.identifiers or {}).get(IDENTIFIER_TYPE_LIVELIB) or livelib_id_from_url(candidate.get('url'))
