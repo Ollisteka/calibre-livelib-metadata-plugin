@@ -13,7 +13,7 @@ from plugin_under_test.providers.livelib import parsers, provider
 
 def test_instances_do_not_share_cache_or_dependencies(source):
     other = LiveLibMetadata()
-    source.cache_identifier_to_cover_url('1', 'https://cover/1')
+    source.litres.cache_cover('1', 'https://cover/1')
     assert other.get_cached_cover_url({'litres': '1'}) is None
     for name in ('transport', 'litres', 'livelib', 'fantlab', 'covers'):
         assert getattr(source, name) is not getattr(other, name)
@@ -74,5 +74,5 @@ def test_identify_with_explicit_fake_providers(log, results, abort):
 
 
 def test_higher_priority_cache_miss_does_not_use_lower_source(source):
-    source.cache_identifier_to_cover_url('2', 'https://cover/2')
+    source.livelib.cache_cover('2', 'https://cover/2')
     assert source.get_cached_cover_url({'litres': '1', 'livelib': '2'}) is None

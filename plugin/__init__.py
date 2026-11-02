@@ -41,9 +41,12 @@ class LiveLibMetadata(Source):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.transport = Transport()
-        self.litres = LitresProvider(self.transport, self.cache_identifier_to_cover_url)
-        self.livelib = LiveLibProvider(self.transport, self.cache_identifier_to_cover_url)
-        self.fantlab = FantlabProvider(self.transport, self.cache_identifier_to_cover_url)
+        self.litres = LitresProvider(
+            self.transport, lambda identifier, url: self.cache_identifier_to_cover_url('litres:' + identifier, url))
+        self.livelib = LiveLibProvider(
+            self.transport, lambda identifier, url: self.cache_identifier_to_cover_url('livelib:' + identifier, url))
+        self.fantlab = FantlabProvider(
+            self.transport, lambda identifier, url: self.cache_identifier_to_cover_url('fantlab:' + identifier, url))
         self.covers = CoverService(
             self.cached_identifier_to_cover_url,
             lambda *args, **kwargs: self.identify(*args, **kwargs),

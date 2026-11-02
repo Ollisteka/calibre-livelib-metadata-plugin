@@ -44,13 +44,13 @@ class CoverService:
     def get_cached_cover_url(self, identifiers):
         litres_id = (identifiers or {}).get(IDENTIFIER_TYPE_LITRES)
         if litres_id:
-            return self.cached_cover(litres_id)
+            return self.cached_cover('litres:' + litres_id)
         livelib_id = (identifiers or {}).get(IDENTIFIER_TYPE_LIVELIB)
         if livelib_id:
-            return self.cached_cover(livelib_id)
+            return self.cached_cover('livelib:' + livelib_id)
         fantlab_id = (identifiers or {}).get(IDENTIFIER_TYPE_FANTLAB)
         if fantlab_id:
-            return self.cached_cover(fantlab_id)
+            return self.cached_cover('fantlab:' + fantlab_id)
         return None
 
     def find_cover_url_direct(self, log, title=None, authors=None, timeout=30):

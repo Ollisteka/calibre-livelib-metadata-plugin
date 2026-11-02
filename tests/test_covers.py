@@ -36,26 +36,26 @@ def test_litres_cover(source, url, art_id, expected):
 @pytest.mark.parametrize('kind', ['litres', 'livelib', 'fantlab'])
 def test_cache(source, kind):
     assert source.get_cached_cover_url({kind: '1'}) is None
-    source.cache_identifier_to_cover_url('1', 'https://cover/1')
+    getattr(source, kind).cache_cover('1', 'https://cover/1')
     assert source.get_cached_cover_url({kind: '1'}) == 'https://cover/1'
     assert source.get_cached_cover_url(None) is None
 
 
 def test_cache_priority(source):
-    for identifier in ['1', '2', 'work3']:
-        source.cache_identifier_to_cover_url(identifier, 'https://cover/' + identifier)
+    for kind, identifier in [('litres', '1'), ('livelib', '2'), ('fantlab', 'work3')]:
+        getattr(source, kind).cache_cover(identifier, 'https://cover/' + identifier)
     assert source.get_cached_cover_url({'litres': '1', 'livelib': '2', 'fantlab': 'work3'}) == 'https://cover/1'
     assert source.get_cached_cover_url({'livelib': '2', 'fantlab': 'work3'}) == 'https://cover/2'
 
 
 def test_collect_covers(source, monkeypatch, log, abort):
-    source.cache_identifier_to_cover_url('initial', 'https://cover/cached')
+    source.litres.cache_cover('initial', 'https://cover/cached')
     def identify(log, queue, abort, **kwargs):
         for identifier, url in [('1', 'https://cover/one'), ('2', 'https://cover/cached'),
                                 ('3', 'https://cover/three'), ('4', None)]:
             mi = calibre_metadata.Metadata('Книга', ['Автор'])
             mi.set_identifier('litres', identifier)
-            source.cache_identifier_to_cover_url(identifier, url)
+            source.litres.cache_cover(identifier, url)
             queue.put(mi)
     monkeypatch.setattr(source, 'identify', identify)
     direct = Mock(side_effect=AssertionError('No fallback when covers exist'))
@@ -97,3 +97,15 @@ def test_download_handoff(source, monkeypatch, log, abort, results, urls, expect
         downloader.assert_called_once_with('Книга', ['Автор'], expected, True, 7, results, abort, log, prefs_name=None)
     else:
         downloader.assert_not_called()
+
+
+def test_same_numeric_id_keeps_both_source_covers(source, monkeypatch, log, abort):
+    def identify(log, queue, abort, **kwargs):
+        queue.put(source.litres.metadata_from_litres_candidate({'id': '123', 'title': 'A'}))
+        queue.put(source.livelib.metadata_from_search_candidate({
+            'url': '/book/123', 'title': 'B', 'cover_url': 'https://cover/B'}))
+    monkeypatch.setattr(source, 'identify', identify)
+    assert source.covers.find_all_cover_urls(log, abort, 'Book', [], {}, 7) == [
+        'https://cdn.litres.ru/pub/c/cover_415/123', 'https://cover/B']
+    assert source.get_cached_cover_url({'litres': '123'}).endswith('/123')
+    assert source.get_cached_cover_url({'livelib': '123'}) == 'https://cover/B'
