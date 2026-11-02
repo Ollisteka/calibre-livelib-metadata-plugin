@@ -1,3 +1,5 @@
+from plugin_under_test import matching
+
 import pytest
 
 
@@ -5,8 +7,8 @@ import pytest
     (None, ''), ('', ''), ('  ЁЖ_и—Ель!!  ', 'еж и ель'),
     ('КНИГА\t  автора', 'книга автора'),
 ], ids=['none', 'empty', 'yo-punctuation-and-underscores', 'case-and-whitespace'])
-def test_norm(plugin_module, value, expected):
-    assert plugin_module.norm(value) == expected
+def test_norm(value, expected):
+    assert matching.norm(value) == expected
 
 
 @pytest.mark.parametrize('query_title, query_authors, title, author, expected', [
@@ -23,8 +25,8 @@ def test_norm(plugin_module, value, expected):
     pytest.param('Книга', [], 'Книга', '', 80, id='exact-title-without-author'),
     pytest.param('', ['Автор'], '', 'Автор', 60, id='exact-author-without-title'),
 ])
-def test_scores(plugin_module, query_title, query_authors, title, author, expected):
-    assert plugin_module.score_match(query_title, query_authors, title, author) == expected
+def test_scores(query_title, query_authors, title, author, expected):
+    assert matching.score_match(query_title, query_authors, title, author) == expected
 
 
 @pytest.mark.parametrize('query, title, expected', [
@@ -34,11 +36,11 @@ def test_scores(plugin_module, query_title, query_authors, title, author, expect
     ('Книга', 'Другое', False), ('', 'Книга', False), ('Книга', None, False),
 ], ids=['exact-title', 'partial-title', 'two-shared-tokens', 'only-one-of-three-tokens',
         'unrelated-titles', 'empty-query', 'missing-result-title'])
-def test_title_matching(plugin_module, query, title, expected):
-    assert plugin_module.title_match_enough(query, title) is expected
+def test_title_matching(query, title, expected):
+    assert matching.title_match_enough(query, title) is expected
 
 
-def test_title_matching_currently_accepts_no_shared_tokens(plugin_module):
+def test_title_matching_currently_accepts_no_shared_tokens():
     # Characterize existing behavior when the query has no multi-character tokens.
     # TODO: Return False when there are no matches, then expect False here.
-    assert plugin_module.title_match_enough('я', 'Дом') is True
+    assert matching.title_match_enough('я', 'Дом') is True

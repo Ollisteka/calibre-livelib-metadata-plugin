@@ -1,10 +1,41 @@
+from calibre.ebooks.metadata.book import base as calibre_metadata
+from plugin_under_test import covers
+from plugin_under_test.providers.livelib import provider
+
 from unittest.mock import Mock
 
 import pytest
+import json
 
 
 PREVIEW = 'https://s1.livelib.ru/boocover/123/200x300/ab/cover.jpg'
 ORIGINAL = 'https://s1.livelib.ru/boocover/123/o/ab/cover.jpeg'
+
+
+@pytest.mark.parametrize('image, expected', [
+    (PREVIEW, PREVIEW),
+    ({'@type': 'ImageObject', 'url': PREVIEW}, PREVIEW),
+    ({'contentUrl': ORIGINAL, 'url': PREVIEW}, ORIGINAL),
+    ({'contentUrl': {}, 'url': PREVIEW}, PREVIEW),
+    ([{}, None, {'url': PREVIEW}], PREVIEW),
+    ('  ' + PREVIEW + '  ', PREVIEW),
+    ({'url': {}}, None), ([], None), (None, None), (42, None), (' ', None),
+])
+def test_livelib_page_image_download(source, monkeypatch, log, abort, results, image, expected):
+    monkeypatch.setattr(provider, 'check_isbn', lambda value: None)
+    book = {'@type': 'Book', 'name': 'Маленькие тролли и большое наводнение',
+            'author': {'name': 'Туве Янссон'}, 'image': image}
+    raw = '<script type="application/ld+json">%s</script>' % json.dumps(book)
+    monkeypatch.setattr(source.transport, 'fetch_livelib_text', Mock(return_value=raw))
+    downloader = Mock()
+    monkeypatch.setattr(source, 'download_multiple_covers', downloader)
+    identifiers = {'livelib': '1002874255'}
+    source.download_cover(log, results, abort, identifiers=identifiers)
+    assert source.get_cached_cover_url(identifiers) == expected
+    if expected:
+        assert downloader.call_args.args[2] == covers.livelib_cover_candidates(expected)
+    else:
+        downloader.assert_not_called()
 
 
 @pytest.mark.parametrize('url, original, candidates', [
@@ -12,9 +43,9 @@ ORIGINAL = 'https://s1.livelib.ru/boocover/123/o/ab/cover.jpeg'
     (ORIGINAL, None, [ORIGINAL]), ('https://elsewhere/cover.png', None, ['https://elsewhere/cover.png']),
     ('', None, []), (None, None, []),
 ], ids=['preview-expanded', 'original-unchanged', 'other-source-unchanged', 'empty', 'missing'])
-def test_cover_variants(plugin_module, url, original, candidates):
-    assert plugin_module.livelib_original_cover_url(url) == original
-    assert plugin_module.livelib_cover_candidates(url) == candidates
+def test_cover_variants(url, original, candidates):
+    assert covers.livelib_original_cover_url(url) == original
+    assert covers.livelib_cover_candidates(url) == candidates
 
 
 @pytest.mark.parametrize('url, art_id, expected', [
@@ -27,37 +58,37 @@ def test_cover_variants(plugin_module, url, original, candidates):
 ], ids=['protocol-relative', 'cdn-relative', 'site-relative', 'absolute', 'missing',
         'empty', 'art-id-overrides-preview'])
 def test_litres_cover(source, url, art_id, expected):
-    assert source.absolutize_litres_cover(url, art_id) == expected
+    assert source.litres.absolutize_litres_cover(url, art_id) == expected
 
 
 @pytest.mark.parametrize('kind', ['litres', 'livelib', 'fantlab'])
 def test_cache(source, kind):
     assert source.get_cached_cover_url({kind: '1'}) is None
-    source.cache_identifier_to_cover_url('1', 'https://cover/1')
+    getattr(source, kind).cache_cover('1', 'https://cover/1')
     assert source.get_cached_cover_url({kind: '1'}) == 'https://cover/1'
     assert source.get_cached_cover_url(None) is None
 
 
 def test_cache_priority(source):
-    for identifier in ['1', '2', 'work3']:
-        source.cache_identifier_to_cover_url(identifier, 'https://cover/' + identifier)
+    for kind, identifier in [('litres', '1'), ('livelib', '2'), ('fantlab', 'work3')]:
+        getattr(source, kind).cache_cover(identifier, 'https://cover/' + identifier)
     assert source.get_cached_cover_url({'litres': '1', 'livelib': '2', 'fantlab': 'work3'}) == 'https://cover/1'
     assert source.get_cached_cover_url({'livelib': '2', 'fantlab': 'work3'}) == 'https://cover/2'
 
 
-def test_collect_covers(source, plugin_module, monkeypatch, log, abort):
-    source.cache_identifier_to_cover_url('initial', 'https://cover/cached')
+def test_collect_covers(source, monkeypatch, log, abort):
+    source.litres.cache_cover('initial', 'https://cover/cached')
     def identify(log, queue, abort, **kwargs):
         for identifier, url in [('1', 'https://cover/one'), ('2', 'https://cover/cached'),
                                 ('3', 'https://cover/three'), ('4', None)]:
-            mi = plugin_module.Metadata('Книга', ['Автор'])
+            mi = calibre_metadata.Metadata('Книга', ['Автор'])
             mi.set_identifier('litres', identifier)
-            source.cache_identifier_to_cover_url(identifier, url)
+            source.litres.cache_cover(identifier, url)
             queue.put(mi)
     monkeypatch.setattr(source, 'identify', identify)
     direct = Mock(side_effect=AssertionError('No fallback when covers exist'))
-    monkeypatch.setattr(source, 'find_cover_url_direct', direct)
-    assert source.find_all_cover_urls(log, abort, 'Книга', [], {'litres': 'initial'}, 7) == [
+    monkeypatch.setattr(source.covers, 'find_cover_url_direct', direct)
+    assert source.covers.find_all_cover_urls(log, abort, 'Книга', [], {'litres': 'initial'}, 7) == [
         'https://cover/cached', 'https://cover/one', 'https://cover/three']
     direct.assert_not_called()
 
@@ -65,17 +96,17 @@ def test_collect_covers(source, plugin_module, monkeypatch, log, abort):
 def test_cover_direct_fallback(source, monkeypatch, log, abort):
     monkeypatch.setattr(source, 'identify', Mock())
     direct = Mock(return_value='https://cover/direct')
-    monkeypatch.setattr(source, 'find_cover_url_direct', direct)
-    assert source.find_all_cover_urls(log, abort, 'Книга', [], {}, 7) == ['https://cover/direct']
-    direct.assert_called_once_with(log, title='Книга', authors=[], timeout=7)
+    monkeypatch.setattr(source.covers, 'find_cover_url_direct', direct)
+    assert source.covers.find_all_cover_urls(log, abort, 'Книга', [], {}, 7) == ['https://cover/direct']
+    direct.assert_called_once_with(log, title='Книга', authors=[], timeout=7, abort=abort)
 
 
 def test_no_cover_query(source, monkeypatch, log, abort):
     identify = Mock()
     direct = Mock()
     monkeypatch.setattr(source, 'identify', identify)
-    monkeypatch.setattr(source, 'find_cover_url_direct', direct)
-    assert source.find_all_cover_urls(log, abort, None, None, {}, 7) == []
+    monkeypatch.setattr(source.covers, 'find_cover_url_direct', direct)
+    assert source.covers.find_all_cover_urls(log, abort, None, None, {}, 7) == []
     identify.assert_not_called()
     direct.assert_not_called()
 
@@ -86,7 +117,7 @@ def test_no_cover_query(source, monkeypatch, log, abort):
     pytest.param([], [], id='no-covers-no-download'),
 ])
 def test_download_handoff(source, monkeypatch, log, abort, results, urls, expected):
-    monkeypatch.setattr(source, 'find_all_cover_urls', Mock(return_value=urls))
+    monkeypatch.setattr(source.covers, 'find_all_cover_urls', Mock(return_value=urls))
     downloader = Mock()
     monkeypatch.setattr(source, 'download_multiple_covers', downloader)
     source.download_cover(log, results, abort, title='Книга', authors=['Автор'], timeout=7, get_best_cover=True)
@@ -94,3 +125,46 @@ def test_download_handoff(source, monkeypatch, log, abort, results, urls, expect
         downloader.assert_called_once_with('Книга', ['Автор'], expected, True, 7, results, abort, log, prefs_name=None)
     else:
         downloader.assert_not_called()
+
+
+def test_same_numeric_id_keeps_both_source_covers(source, monkeypatch, log, abort):
+    def identify(log, queue, abort, **kwargs):
+        queue.put(source.litres.metadata_from_litres_candidate({'id': '123', 'title': 'A'}))
+        queue.put(source.livelib.metadata_from_search_candidate({
+            'url': '/book/123', 'title': 'B', 'cover_url': 'https://cover/B'}))
+    monkeypatch.setattr(source, 'identify', identify)
+    assert source.covers.find_all_cover_urls(log, abort, 'Book', [], {}, 7) == [
+        'https://cdn.litres.ru/pub/c/cover_415/123', 'https://cover/B']
+    assert source.get_cached_cover_url({'litres': '123'}).endswith('/123')
+    assert source.get_cached_cover_url({'livelib': '123'}) == 'https://cover/B'
+
+
+@pytest.mark.parametrize('kind', ['litres', 'livelib'])
+def test_cold_cache_direct_id(source, monkeypatch, log, abort, kind):
+    def identify(log, queue, abort, **kwargs):
+        assert kwargs['identifiers'] == {kind: '123'}
+        getattr(source, kind).cache_cover('123', 'https://cover/direct')
+        mi = calibre_metadata.Metadata('Book', [])
+        mi.set_identifier(kind, '123')
+        queue.put(mi)
+    lookup = Mock(side_effect=identify)
+    monkeypatch.setattr(source, 'identify', lookup)
+    assert source.covers.find_all_cover_urls(log, abort, None, None, {kind: '123'}, 7) == ['https://cover/direct']
+    lookup.assert_called_once()
+
+
+def test_cancelled_identify_does_not_start_cover_fallback(source, monkeypatch, log, abort):
+    monkeypatch.setattr(source, 'identify', lambda *args, **kwargs: abort.set())
+    direct = Mock()
+    monkeypatch.setattr(source.covers, 'find_cover_url_direct', direct)
+    assert source.covers.find_all_cover_urls(log, abort, 'Book', [], {}, 7) == []
+    direct.assert_not_called()
+
+
+def test_cancelled_cover_request_never_searches(source, monkeypatch, log, abort):
+    abort.set()
+    search = Mock()
+    monkeypatch.setattr(source.litres, 'search_litres', search)
+    assert source.covers.find_all_cover_urls(log, abort, 'Book', [], {}, 7) == []
+    assert source.covers.find_cover_url_direct(log, title='Book', abort=abort) is None
+    search.assert_not_called()

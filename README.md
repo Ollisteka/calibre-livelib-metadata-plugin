@@ -14,9 +14,9 @@ poor matches, or no cover at all, this plugin is for you.
 
 - **Three Russian sources in one plugin.** Queries LitRes (public API), LiveLib (beta pages), and
   FantLab, then merges and ranks the results by how well title and author match your book.
-- **Multiple covers from every matched source.** When a book is found on more than one service,
-  Calibre's cover picker shows covers from *all* of them (LitRes **and** LiveLib **and** FantLab),
-  not just the top hit — so you can choose the one you like.
+- **Multiple covers from returned candidates.** The cover picker receives available cached covers
+  from up to six ranked candidates. Direct-ID lookup selects LitRes before LiveLib; it does not
+  search every service or guarantee a candidate from each source.
 - **High-resolution covers.** Prefers the original LiveLib `/o/...jpeg` image and falls back to a
   preview automatically if the original is unavailable.
 - **Rich Russian metadata.** Imports Russian descriptions, genre tags, rating and vote count, ISBN,
@@ -87,7 +87,7 @@ Calibre calls the plugin in two phases:
 - **Identify** — searches the sources, builds candidate matches, and caches each source's cover URL.
   Cover *images* are intentionally **not** downloaded during this phase, which keeps identification
   fast.
-- **Download cover** — collects the cached cover URLs from every matched source, expands each into
+- **Download cover** — collects the cached cover URLs from returned candidates, expands each into
   its resolution variants, de-duplicates, and hands them all to Calibre's cover picker.
 
 Physical edition details that Calibre cannot store natively are written into the book's comments
@@ -100,6 +100,15 @@ under **«Детали издания LiveLib»**.
 ```bash
 ./scripts/build-plugin.sh
 ```
+
+On Windows, run from the project root in PowerShell with Python installed:
+
+```powershell
+py scripts/build_plugin.py
+```
+
+If you use the project's virtual environment, run `.\.venv\Scripts\python.exe scripts/build_plugin.py` instead. 
+No additional packages are required to build the ZIP.
 
 The build writes the installable archive to:
 
