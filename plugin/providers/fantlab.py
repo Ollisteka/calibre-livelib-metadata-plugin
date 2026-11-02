@@ -27,7 +27,7 @@ class FantlabProvider:
         parameter, block = ('w', 'works') if kind == 'work' else ('e', 'editions')
         url = FANTLAB_API_BASE_URL + '/search-ids?' + parameter + '=' + number
         log.info('FantLab direct lookup: ' + url)
-        payload = json.loads(self.transport.fetch_url(url, timeout))
+        payload = self.transport.fetch_fantlab_json(url, timeout)
         for item in payload.get(block) or []:
             if as_unicode(item.get('id')) != number:
                 continue

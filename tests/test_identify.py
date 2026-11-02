@@ -70,7 +70,7 @@ def test_direct_livelib_id_detail_error_also_searches_missing_sources(
     fetch.assert_called_once_with(log, 'https://beta.livelib.ru/book/123', 15)
     searches['search_litres'].assert_called_once()
     searches['search_fantlab'].assert_called_once()
-    searches['fetch_url'].assert_not_called()
+    searches['fetch_livelib_text'].assert_not_called()
 
 
 def test_both_direct_ids_are_fetched(source, monkeypatch, searches, log, results, abort):

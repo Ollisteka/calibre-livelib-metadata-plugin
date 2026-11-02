@@ -153,7 +153,7 @@ def test_fantlab_direct_lookup(source, monkeypatch, log, results, abort, identif
     number = ''.join(c for c in identifier if c.isdigit())
     payload = {block: [{'id': int(number), 'name': 'Книга', 'creators': {'authors': [{'name': 'Автор'}]}, 'image': '/image.jpg'}]}
     fetch = Mock(return_value=json.dumps(payload))
-    monkeypatch.setattr(source.transport, 'fetch_url', fetch)
+    monkeypatch.setattr(source.transport, 'fetch_fantlab_json', lambda url, timeout: json.loads(fetch(url, timeout)))
     source.prefs.update(use_litres=False, use_livelib=False)
     source.identify(log, results, abort, identifiers={'fantlab': identifier})
     mi = results.get_nowait()

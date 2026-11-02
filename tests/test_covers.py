@@ -29,6 +29,7 @@ def test_livelib_page_image_download(source, monkeypatch, log, abort, results, i
     monkeypatch.setattr(source.transport, 'fetch_livelib_text', Mock(return_value=raw))
     downloader = Mock()
     monkeypatch.setattr(source, 'download_multiple_covers', downloader)
+    source.prefs.update(use_litres=False, use_fantlab=False)
     identifiers = {'livelib': '1002874255'}
     source.download_cover(log, results, abort, identifiers=identifiers)
     assert source.get_cached_cover_url(identifiers) == expected

@@ -69,7 +69,7 @@ def test_identify_with_explicit_fake_providers(log, results, abort):
     livelib = SimpleNamespace(search_page=search('beta', []))
     fantlab = SimpleNamespace(search_fantlab=search('fantlab', [{'source': 'fantlab', 'score': 100}]),
                               metadata_from_fantlab_candidate=lambda row: second)
-    identify(litres, livelib, fantlab, log, results, abort, title='Книга')
+    identify(litres, livelib, fantlab, lambda *args: None, log, results, abort, title='Книга')
     assert calls == ['litres', 'beta', 'fantlab']
     assert [results.get_nowait(), results.get_nowait()] == [first, second]
     assert first.source_relevance == second.source_relevance == -100

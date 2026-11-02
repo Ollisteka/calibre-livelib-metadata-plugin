@@ -21,7 +21,7 @@ def test_litres_does_not_retry_after_its_budget_expires(source, monkeypatch, log
         clock[0] += remaining
         raise TimeoutError('TLS handshake timed out')
     fetch = Mock(side_effect=timeout)
-    monkeypatch.setattr(source.transport, 'fetch_json', fetch)
+    monkeypatch.setattr(source.transport, 'fetch_litres_json', fetch)
     assert source.litres.search_litres(log, 'Книга', ['Автор'], 7) == []
     assert fetch.call_count == 1
     assert clock[0] == 7
@@ -35,7 +35,7 @@ def test_litres_retry_uses_only_remaining_time(source, monkeypatch, log, clock):
         if len(budgets) == 1:
             raise OSError('connection failed')
         return {'payload': {'data': []}}
-    monkeypatch.setattr(source.transport, 'fetch_json', fetch)
+    monkeypatch.setattr(source.transport, 'fetch_litres_json', fetch)
     source.litres.search_litres(log, 'Книга', ['Автор'], 7)
     assert budgets == [7, 5]
 
@@ -68,8 +68,8 @@ def test_litres_timeout_leaves_time_for_livelib_and_details(
         return '<script type="application/ld+json">%s</script>' % json.dumps({
             '@type': 'Book', 'name': 'Книга', 'author': {'name': 'Автор'},
             'description': 'Описание'})
-    monkeypatch.setattr(source.transport, 'fetch_json', litres_timeout)
-    monkeypatch.setattr(source.transport, 'fetch_url', html)
+    monkeypatch.setattr(source.transport, 'fetch_litres_json', litres_timeout)
+    monkeypatch.setattr(source.transport, 'fetch_livelib_text', html)
     from plugin_under_test.providers.livelib import provider
     monkeypatch.setattr(provider, 'check_isbn', lambda value: None)
     def fantlab_timeout(*args, timeout):
