@@ -119,7 +119,7 @@ def test_no_cover_query(source, monkeypatch, log, abort):
                  [ORIGINAL, PREVIEW, 'https://other/cover'], id='deduplicated-cover-variants'),
     pytest.param([], [], id='no-covers-no-download'),
 ])
-def test_download_handoff(source, monkeypatch, log, abort, results, urls, expected):
+def test_download_handoff(source, monkeypatch, log, abort, results, urls, expected, clock):
     monkeypatch.setattr(source.covers, 'find_all_cover_urls', Mock(return_value=urls))
     downloader = Mock()
     monkeypatch.setattr(source, 'download_multiple_covers', downloader)

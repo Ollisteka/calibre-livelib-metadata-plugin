@@ -1,19 +1,25 @@
 """Regression tests use a shared clock rather than sleeping or network access."""
-import importlib
 import json
 from unittest.mock import Mock
 
 import pytest
 
-from plugin_under_test.providers import litres
 
-
-@pytest.fixture
-def clock(monkeypatch):
-    now = [0.0]
-    monkeypatch.setattr(importlib.import_module('plugin_under_test.identify'), 'monotonic', lambda: now[0])
-    monkeypatch.setattr(litres, 'monotonic', lambda: now[0])
-    return now
+@pytest.mark.parametrize('elapsed', [2, 7, 8], ids=['time-left', 'deadline', 'expired'])
+def test_cover_download_uses_remaining_budget(source, monkeypatch, log, results, abort, clock, elapsed):
+    def lookup(*args):
+        clock[0] += elapsed
+        return ['https://cover/book']
+    monkeypatch.setattr(source.covers, 'find_all_cover_urls', lookup)
+    download = Mock()
+    monkeypatch.setattr(source, 'download_multiple_covers', download)
+    source.download_cover(log, results, abort, title='Book', timeout=7)
+    if elapsed < 7:
+        download.assert_called_once_with(
+            'Book', None, ['https://cover/book'], False, 7 - elapsed,
+            results, abort, log, prefs_name=None)
+    else:
+        download.assert_not_called()
 
 
 def test_litres_does_not_retry_after_its_budget_expires(source, monkeypatch, log, clock):

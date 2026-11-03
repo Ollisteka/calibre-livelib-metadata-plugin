@@ -42,7 +42,7 @@ def searches(source, monkeypatch):
     return doubles
 
 
-def test_direct_litres_id_also_searches_missing_sources(source, monkeypatch, searches, log, results, abort):
+def test_direct_litres_id_also_searches_missing_sources(source, monkeypatch, searches, log, results, abort, clock):
     fetch = Mock(return_value={'payload': {'data': {
         'id': '123', 'title': 'Подробное', 'language_code': 'ru'}}})
     monkeypatch.setattr(source.transport, 'fetch_litres_json', fetch)
@@ -58,7 +58,7 @@ def test_direct_litres_id_also_searches_missing_sources(source, monkeypatch, sea
 
 
 def test_direct_livelib_id_detail_error_also_searches_missing_sources(
-        source, monkeypatch, searches, log, results, abort):
+        source, monkeypatch, searches, log, results, abort, clock):
     fetch = Mock(side_effect=OSError('detail unavailable'))
     monkeypatch.setattr(source.livelib, 'fetch_book', fetch)
     source.identify(log, results, abort, title='Книга', authors=['Автор'], identifiers={'livelib': '123'})
@@ -146,7 +146,7 @@ def test_merge_sources_orders_by_score_and_limits_to_six(source, monkeypatch, se
     pytest.param('livelib', 'rus', 'https://cover/1', id='livelib-detail-error'),
 ])
 def test_detail_error_preserves_candidate_metadata_and_caches_cover(
-        source, monkeypatch, searches, log, results, abort, kind, expected_language, expected_cover):
+        source, monkeypatch, searches, log, results, abort, kind, expected_language, expected_cover, clock):
     row = candidate(kind, 1)
     search = 'search_litres' if kind == 'litres' else 'parse_search_results'
     searches[search].return_value = [row]
