@@ -15,7 +15,7 @@ from calibre.customize.zipplugin import loader
 from calibre.utils.logging import Log
 from calibre.gui2.metadata.basic_widgets import RatingEdit
 from calibre.gui2.metadata.single import MetadataSingleDialogBase
-from qt.core import QApplication, QCheckBox, QLineEdit
+from qt.core import QApplication, QCheckBox, QComboBox, QLineEdit
 
 
 def main(path, previous_path=None):
@@ -45,6 +45,13 @@ def main(path, previous_path=None):
     username = next(w for w in widget.widgets if isinstance(w, QLineEdit)
                     and w.opt.name == 'livelib_username')
     assert username.text() == ''
+    fallback = next(w for w in widget.widgets if isinstance(w, QComboBox)
+                    and w.opt.name == 'livelib_rating_fallback')
+    assert fallback.currentData() == 'none'
+    assert {fallback.itemText(i) for i in range(fallback.count())} == {
+        'Использовать общую оценку книги', 'Не переносить оценку'}
+    fallback.setCurrentIndex(fallback.findData('public'))
+    assert type(plugin)(None).prefs['livelib_rating_fallback'] == 'none'
     username.setText('example_reader')
     assert type(plugin)(None).prefs['livelib_username'] == ''
     switches['use_litres'].setChecked(False)
@@ -53,9 +60,15 @@ def main(path, previous_path=None):
     plugin.save_settings(widget)
     assert type(plugin)(None).prefs['use_litres'] is False
     assert type(plugin)(None).prefs['livelib_username'] == 'example_reader'
+    assert type(plugin)(None).prefs['livelib_rating_fallback'] == 'public'
+    restored = plugin.config_widget()
+    assert next(w for w in restored.widgets if isinstance(w, QComboBox)
+                and w.opt.name == 'livelib_rating_fallback').currentData() == 'public'
+    fallback.setCurrentIndex(fallback.findData('none'))
     username.setText('')
     switches['use_litres'].setChecked(True)
     plugin.save_settings(widget)
+    assert type(plugin)(None).prefs['livelib_rating_fallback'] == 'none'
     plugin.prefs['ignore_fields'] = ['tags']
     widget = plugin.config_widget()
     plugin.save_settings(widget)

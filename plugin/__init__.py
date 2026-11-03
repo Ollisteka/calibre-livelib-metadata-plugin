@@ -106,7 +106,8 @@ class LiveLibMetadata(Source):
         return identify(self.litres, self.livelib, self.fantlab,
                         log, result_queue,
                         abort, title, authors, identifiers, timeout,
-                        enabled, enrich_personal=enrich_personal)
+                        enabled, enrich_personal=enrich_personal,
+                        fallback_public_rating=self.prefs['livelib_rating_fallback'] == 'public')
 
     def get_cached_cover_url(self, identifiers):
         return self.covers.get_cached_cover_url(identifiers)

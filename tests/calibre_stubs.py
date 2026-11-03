@@ -37,8 +37,9 @@ class Source:
 
 
 class Option:
-    def __init__(self, name, type_, default, label, desc):
+    def __init__(self, name, type_, default, label, desc, choices=None):
         self.name, self.type, self.default, self.label, self.desc = name, type_, default, label, desc
+        self.choices = choices
 
 
 def install():

@@ -66,11 +66,16 @@ Open **Preferences → Metadata download**, select **LiveLib Metadata**, and cli
 - **Имя пользователя LiveLib** (optional): enter your username — the `LOGIN` part of
   `livelib.ru/reader/LOGIN` — to import your personal rating and read date from your public
   **«Прочитал»** shelf. No password is needed. Leave it blank to use regular book ratings.
+- **Если личная оценка LiveLib не найдена:** choose **Не переносить оценку** (default)
+  or **Использовать общую оценку книги** to fall back to the public rating from the
+  enabled sources. A personal rating always takes priority when found.
 - **Fields:** enable **Rating** and **Comments** to receive your personal rating and
   reading details. The read date appears in the book's comments.
 
 Reading history requires LiveLib to be enabled and matches the exact book edition.
-If no personal rating is found, the plugin returns no rating. For large shelves, you may
+The fallback setting also applies when the profile is unavailable or the lookup times out.
+With **Не переносить оценку**, the plugin returns no rating if no personal rating is found.
+For large shelves, you may
 need to download metadata again to find your reading details.
 
 Settings apply to all libraries in your Calibre profile.

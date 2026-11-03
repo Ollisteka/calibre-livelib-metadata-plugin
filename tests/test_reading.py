@@ -141,8 +141,18 @@ def test_personal_rows_extend_one_edition_block_and_escape():
 
 
 @pytest.mark.parametrize('rating', [1, 2, 3, 3.5, 4, 4.5, 5])
-def test_personal_metadata_applies_to_all_merged_results(source, monkeypatch, log, results, abort, rating):
+@pytest.mark.parametrize('fallback', ['none', 'public'])
+def test_personal_metadata_applies_to_all_merged_results(source, monkeypatch, log, results, abort, rating, fallback):
     setup_sources(source, monkeypatch)
+    source.prefs['livelib_rating_fallback'] = fallback
+    original = source.litres.fetch_litres_book
+
+    def rated(*args):
+        mi = original(*args)
+        mi.rating = 9
+        return mi
+
+    monkeypatch.setattr(source.litres, 'fetch_litres_book', rated)
     source.prefs['livelib_username'] = ' reader '
     post = Mock(return_value=page(HEADING + book('2', str(rating))))
     monkeypatch.setattr(source.transport, 'post_form_json', post)
@@ -174,9 +184,11 @@ def test_personal_requests_are_opt_in(source, monkeypatch, log, results, abort, 
 
 @pytest.mark.parametrize('response', [OSError('private profile'), page(book('999')),
                                     page(HEADING + book('2', None))])
-def test_personal_failure_or_missing_rating_does_not_use_public_rating(
-        source, monkeypatch, log, results, abort, response):
+@pytest.mark.parametrize('fallback, expected', [('none', None), ('public', 4.5)])
+def test_personal_failure_or_missing_rating_respects_fallback(
+        source, monkeypatch, log, results, abort, response, fallback, expected):
     setup_sources(source, monkeypatch)
+    source.prefs['livelib_rating_fallback'] = fallback
     original = source.litres.fetch_litres_book
     def rated(*args):
         mi = original(*args)
@@ -188,14 +200,16 @@ def test_personal_failure_or_missing_rating_does_not_use_public_rating(
     monkeypatch.setattr(source.transport, 'post_form_json', post)
     source.identify(log, results, abort, identifiers={'litres': '1'})
     mi = results.get_nowait()
-    assert mi.rating is None
+    assert mi.rating == expected
     assert 'Моя оценка LiveLib:' not in mi.comments
 
 
 @pytest.mark.parametrize('failure', ['unread', 'unrated', 'exception', 'deadline'])
-def test_personal_mode_never_exports_aggregate_ratings(
-        source, monkeypatch, log, results, abort, failure):
+@pytest.mark.parametrize('fallback, expected', [('none', None), ('public', 5)])
+def test_personal_mode_respects_rating_fallback(
+        source, monkeypatch, log, results, abort, failure, fallback, expected):
     setup_sources(source, monkeypatch)
+    source.prefs['livelib_rating_fallback'] = fallback
     original = source.litres.fetch_litres_book
     now = [0]
     monkeypatch.setattr(importlib.import_module('plugin_under_test.identify'),
@@ -226,14 +240,16 @@ def test_personal_mode_never_exports_aggregate_ratings(
     assert results.qsize() == 3
     while not results.empty():
         mi = results.get_nowait()
-        assert mi.rating is None
+        assert mi.rating == expected
         assert 'Моя оценка LiveLib:' not in mi.comments
         if failure == 'unrated':
             assert 'Дата прочтения LiveLib: Октябрь 2026 г.' in mi.comments
 
 
-def test_public_mode_still_exports_aggregate_rating(source, monkeypatch, log, results, abort):
+@pytest.mark.parametrize('fallback', ['none', 'public'])
+def test_public_mode_still_exports_aggregate_rating(source, monkeypatch, log, results, abort, fallback):
     setup_sources(source, monkeypatch)
+    source.prefs['livelib_rating_fallback'] = fallback
     original = source.litres.fetch_litres_book
 
     def rated(*args):

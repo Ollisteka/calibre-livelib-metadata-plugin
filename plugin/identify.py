@@ -10,7 +10,8 @@ STRONG_MATCH_SCORE = 100
 
 
 def identify(litres, livelib, fantlab, log, result_queue, abort, title=None, authors=None,
-             identifiers=None, timeout=30, enabled=None, enrich_personal=None):
+             identifiers=None, timeout=30, enabled=None, enrich_personal=None,
+             fallback_public_rating=False):
     """Search enabled providers, enrich results, and emit at most six candidates."""
     identifiers = identifiers or {}
     enabled = frozenset(SOURCE_NAMES if enabled is None else enabled)
@@ -133,9 +134,9 @@ def identify(litres, livelib, fantlab, log, result_queue, abort, title=None, aut
                                       blocked_sources={c.get('source', 'livelib') for c in candidates
                                                        if c not in selected})
                if not direct_results or any(mi is direct for direct in direct_results)]
-    if enrich_personal is not None:
-        # In personal mode, aggregate ratings must never stand in for the
-        # reader's own rating, even if the shelf lookup fails or times out.
+    if enrich_personal is not None and not fallback_public_rating:
+        # Clear public ratings before enrichment unless the user opted into
+        # fallback, including when the shelf lookup fails or times out.
         for mi in results:
             mi.rating = None
     if enrich_personal is not None and results and not stopped():
