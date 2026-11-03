@@ -28,12 +28,12 @@ def main(path, previous_path=None):
             del sys.modules[name]
     if previous_path:
         previous = loader.load(previous_path)(None)
-        assert previous.version < (0, 5, 0)
+        assert previous.version < (0, 5, 1)
         assert 'calibre_plugins.livelib_metadata.identifiers' in sys.modules
         # Keep the previous modules loaded, as Preferences -> Load plugin from
         # file does when replacing an installed plugin in a running Calibre.
     plugin = loader.load(path)(None)
-    assert plugin.version == (0, 5, 0)
+    assert plugin.version == (0, 5, 1)
     assert type(plugin).__module__ == 'calibre_plugins.livelib_metadata'
     # Use an isolated CALIBRE_CONFIG_DIRECTORY when running this script.
     # Exercise Calibre's real generated widget and JSONConfig persistence.
@@ -140,6 +140,21 @@ def main(path, previous_path=None):
         assert editor.rating.current_val == 8  # Four stars, not a clamped five.
     plugin.transport.post_form_json.assert_called_once()
     plugin.prefs['livelib_username'] = ''
+    multi_book = dict(book, name='Зажги себя! Жизнь — в движении',
+                      author=[{'name': 'Джон Рэйти'}, {'name': 'Эрик Хагерман'}])
+    multi_card = '<script type="application/ld+json">%s</script>' % json.dumps(multi_book)
+    plugin.transport.fetch_livelib_text = lambda url, timeout: multi_card
+    plugin.prefs['use_litres'] = plugin.prefs['use_fantlab'] = False
+    queue = Queue()
+    plugin.identify(log, queue, abort, title=multi_book['name'],
+                    authors=['Джон Рэйти', 'Эрик Хагерман'],
+                    identifiers={'livelib': '1002467643'})
+    assert queue.qsize() == 1
+    mi = queue.get_nowait()
+    assert mi.authors == ['Джон Рэйти', 'Эрик Хагерман']
+    assert mi.identifiers['livelib'] == '1002467643'
+    plugin.transport.fetch_livelib_text = text
+    plugin.prefs['use_litres'] = plugin.prefs['use_fantlab'] = True
     downloader = Mock()
     plugin.download_multiple_covers = downloader
     plugin.download_cover(log, Queue(), abort, title='Книга', authors=['Автор'], get_best_cover=True)

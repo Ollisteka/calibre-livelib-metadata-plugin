@@ -43,7 +43,7 @@ class LiveLibMetadata(Source):
     name = 'LiveLib Metadata'
     description = 'Downloads Russian metadata and covers from LitRes, LiveLib, and FantLab'
     author = 'OpenAI Codex for Emin'
-    version = (0, 5, 0)
+    version = (0, 5, 1)
     minimum_calibre_version = (6, 0, 0)
 
     capabilities = frozenset(['identify', 'cover'])

@@ -1,7 +1,10 @@
 # Changelog
 
-## v0.5.0 - Unreleased
+## v0.5.1 - Unreleased
 
+- Fix direct LiveLib lookups crashing on books with multiple JSON-LD authors; preserve all coauthors in page metadata and direct-lookup fallback results.
+
+## v0.5.0 - Unreleased
 - Add a setting for missing LiveLib personal ratings: use the public book rating from enabled sources or return no rating (default). Personal ratings always take priority; the setting also covers unavailable profiles and lookup timeouts.
 - Prefer non-audio LitRes editions with matching normalized titles and authors before fetching and merging results. Retain audio-only matches and explicit audio IDs; no additional setting is needed.
 - Fix ratings passed to Calibre's metadata download API: return 0..5 values, since Calibre converts these to its internal 0..10 scale when applying a result. Previously personal ratings such as 4/5 could display as five stars.

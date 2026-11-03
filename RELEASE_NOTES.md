@@ -1,9 +1,10 @@
-# LiveLib Metadata for Calibre v0.5.0
+# LiveLib Metadata for Calibre v0.5.1
 
 Feature release of `LiveLib Metadata`, a Calibre metadata source plugin for Russian-language book libraries.
 
 ## Highlights
 
+- Fixes direct LiveLib lookups for books with multiple authors, including `1002467643`. All coauthors are preserved instead of causing a metadata matching crash.
 - Set **Имя пользователя LiveLib** to import your rating into Calibre and add your rating and read date to **«Детали издания LiveLib»**. Uses your public read shelf and exact edition IDs; reviews and a custom date column are not included yet.
 - Fixes the rating scale passed to Calibre: a personal rating of 4/5 now displays as four stars instead of five.
 - Preserves the read date's original precision, including month-only or year-only dates. Uses the newest shelf entry for repeat readings.

@@ -2,6 +2,7 @@ from plugin_under_test.providers.livelib import provider
 
 from unittest.mock import Mock
 
+import json
 import pytest
 
 
@@ -80,6 +81,22 @@ def test_both_direct_ids_are_fetched(source, monkeypatch, searches, log, results
     source.identify(log, results, abort, title='Книга', identifiers={'litres': '1', 'livelib': '2'})
     assert [mi.identifiers for mi in drain(results)] == [{'litres': '1', 'livelib': '2'}] * 2
     livelib_details.assert_called_once()
+
+
+def test_direct_livelib_id_with_multiple_page_authors(
+        source, monkeypatch, searches, log, results, abort):
+    authors = ['Джон Рэйти', 'Эрик Хагерман']
+    title = 'Зажги себя! Жизнь — в движении'
+    searches['fetch_livelib_text'].return_value = (
+        '<script type="application/ld+json">%s</script>' % json.dumps({
+            '@type': 'Book', 'name': title, 'author': [{'name': a} for a in authors]}))
+    monkeypatch.setattr(provider, 'check_isbn', lambda value: None)
+    identifiers = {'isbn': '9785001007616', 'livelib': '1002467643'}
+    source.identify(log, results, abort, title=title, authors=authors, identifiers=identifiers)
+    found = drain(results)
+    assert len(found) == 1
+    assert (found[0].title, found[0].authors, found[0].identifiers) == (title, authors, identifiers)
+    assert searches['fetch_livelib_text'].call_args.args[0] == 'https://beta.livelib.ru/book/1002467643'
 
 
 @pytest.mark.parametrize('score, legacy', [
