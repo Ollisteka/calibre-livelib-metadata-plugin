@@ -2,6 +2,7 @@ from plugin_under_test.providers.livelib import provider
 
 from unittest.mock import Mock
 
+import json
 import pytest
 
 
@@ -41,7 +42,7 @@ def searches(source, monkeypatch):
     return doubles
 
 
-def test_direct_litres_id_fetches_details_without_search(source, monkeypatch, searches, log, results, abort):
+def test_direct_litres_id_also_searches_missing_sources(source, monkeypatch, searches, log, results, abort, clock):
     fetch = Mock(return_value={'payload': {'data': {
         'id': '123', 'title': 'Подробное', 'language_code': 'ru'}}})
     monkeypatch.setattr(source.transport, 'fetch_litres_json', fetch)
@@ -51,13 +52,13 @@ def test_direct_litres_id_fetches_details_without_search(source, monkeypatch, se
     assert found[0].identifiers == {'litres': '123'}
     assert (found[0].title, found[0].authors, found[0].language) == ('Подробное', ['Автор'], 'rus')
     assert found[0].source_relevance == -1000
-    fetch.assert_called_once_with('https://api.litres.ru/foundation/api/arts/123', 30)
-    for search in searches.values():
-        search.assert_not_called()
+    fetch.assert_called_once_with('https://api.litres.ru/foundation/api/arts/123', 15)
+    searches['search_litres'].assert_not_called()
+    searches['search_fantlab'].assert_called_once()
 
 
-def test_direct_livelib_id_detail_error_returns_query_metadata_without_search(
-        source, monkeypatch, searches, log, results, abort):
+def test_direct_livelib_id_detail_error_also_searches_missing_sources(
+        source, monkeypatch, searches, log, results, abort, clock):
     fetch = Mock(side_effect=OSError('detail unavailable'))
     monkeypatch.setattr(source.livelib, 'fetch_book', fetch)
     source.identify(log, results, abort, title='Книга', authors=['Автор'], identifiers={'livelib': '123'})
@@ -67,18 +68,35 @@ def test_direct_livelib_id_detail_error_returns_query_metadata_without_search(
     assert (found[0].title, found[0].authors, found[0].language) == ('Книга', ['Автор'], 'rus')
     assert found[0].comments is None
     assert found[0].source_relevance == -1000
-    fetch.assert_called_once_with(log, 'https://beta.livelib.ru/book/123', 30)
-    for search in searches.values():
-        search.assert_not_called()
+    fetch.assert_called_once_with(log, 'https://beta.livelib.ru/book/123', 15)
+    searches['search_litres'].assert_called_once()
+    searches['search_fantlab'].assert_called_once()
+    searches['fetch_livelib_text'].assert_not_called()
 
 
-def test_direct_litres_priority(source, monkeypatch, searches, log, results, abort):
+def test_both_direct_ids_are_fetched(source, monkeypatch, searches, log, results, abort):
     monkeypatch.setattr(source.litres, 'fetch_litres_book', Mock(side_effect=OSError('no details')))
-    livelib_details = Mock()
+    livelib_details = Mock(side_effect=OSError('no details'))
     monkeypatch.setattr(source.livelib, 'fetch_book', livelib_details)
     source.identify(log, results, abort, title='Книга', identifiers={'litres': '1', 'livelib': '2'})
-    assert [mi.identifiers for mi in drain(results)] == [{'litres': '1'}]
-    livelib_details.assert_not_called()
+    assert [mi.identifiers for mi in drain(results)] == [{'litres': '1', 'livelib': '2'}] * 2
+    livelib_details.assert_called_once()
+
+
+def test_direct_livelib_id_with_multiple_page_authors(
+        source, monkeypatch, searches, log, results, abort):
+    authors = ['Джон Рэйти', 'Эрик Хагерман']
+    title = 'Зажги себя! Жизнь — в движении'
+    searches['fetch_livelib_text'].return_value = (
+        '<script type="application/ld+json">%s</script>' % json.dumps({
+            '@type': 'Book', 'name': title, 'author': [{'name': a} for a in authors]}))
+    monkeypatch.setattr(provider, 'check_isbn', lambda value: None)
+    identifiers = {'isbn': '9785001007616', 'livelib': '1002467643'}
+    source.identify(log, results, abort, title=title, authors=authors, identifiers=identifiers)
+    found = drain(results)
+    assert len(found) == 1
+    assert (found[0].title, found[0].authors, found[0].identifiers) == (title, authors, identifiers)
+    assert searches['fetch_livelib_text'].call_args.args[0] == 'https://beta.livelib.ru/book/1002467643'
 
 
 @pytest.mark.parametrize('score, legacy', [
@@ -128,7 +146,7 @@ def test_merge_sources_orders_by_score_and_limits_to_six(source, monkeypatch, se
     pytest.param('livelib', 'rus', 'https://cover/1', id='livelib-detail-error'),
 ])
 def test_detail_error_preserves_candidate_metadata_and_caches_cover(
-        source, monkeypatch, searches, log, results, abort, kind, expected_language, expected_cover):
+        source, monkeypatch, searches, log, results, abort, kind, expected_language, expected_cover, clock):
     row = candidate(kind, 1)
     search = 'search_litres' if kind == 'litres' else 'parse_search_results'
     searches[search].return_value = [row]

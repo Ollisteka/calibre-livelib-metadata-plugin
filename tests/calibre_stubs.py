@@ -1,6 +1,7 @@
 """Small storage-only stand-ins; these do not validate Calibre's behavior."""
 import sys
 from types import ModuleType
+from copy import deepcopy
 
 
 class Metadata:
@@ -16,10 +17,14 @@ class Metadata:
     def set_identifier(self, key, value):
         self.identifiers[key] = value
 
+    def deepcopy_metadata(self):
+        return deepcopy(self)
+
 
 class Source:
     def __init__(self):
         self._covers = {}
+        self.prefs = {option.name: option.default for option in self.options}
 
     def cache_identifier_to_cover_url(self, identifier, url):
         self._covers[identifier] = url
@@ -29,6 +34,12 @@ class Source:
 
     def download_multiple_covers(self, *args, **kwargs):
         raise AssertionError('Replace the Calibre downloader in this test')
+
+
+class Option:
+    def __init__(self, name, type_, default, label, desc, choices=None):
+        self.name, self.type, self.default, self.label, self.desc = name, type_, default, label, desc
+        self.choices = choices
 
 
 def install():
@@ -44,3 +55,4 @@ def install():
     sys.modules['calibre.ebooks.metadata'].check_isbn = unsupported_isbn
     sys.modules['calibre.ebooks.metadata.book.base'].Metadata = Metadata
     sys.modules['calibre.ebooks.metadata.sources.base'].Source = Source
+    sys.modules['calibre.ebooks.metadata.sources.base'].Option = Option

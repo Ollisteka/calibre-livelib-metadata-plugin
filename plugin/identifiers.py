@@ -31,27 +31,48 @@ def livelib_beta_url(url):
 
 
 def get_book_url(identifiers):
-    litres_id = identifiers.get(IDENTIFIER_TYPE_LITRES)
-    if litres_id:
-        return (IDENTIFIER_TYPE_LITRES, litres_id, LITRES_WEB_BASE + '/book/' + litres_id)
-    livelib_id = identifiers.get(IDENTIFIER_TYPE_LIVELIB)
-    if livelib_id:
-        return (IDENTIFIER_TYPE_LIVELIB, livelib_id, BASE_URL + '/book/' + livelib_id)
-    fantlab_id = identifiers.get(IDENTIFIER_TYPE_FANTLAB)
-    if fantlab_id and FANTLAB_IDENTIFIER_PATTERN.fullmatch(as_unicode(fantlab_id)):
-        return (IDENTIFIER_TYPE_FANTLAB, fantlab_id, FANTLAB_BASE_URL + '/' + as_unicode(fantlab_id))
+    urls = get_book_urls(identifiers)
+    return urls[0] if urls else None
+
+
+def get_book_urls(identifiers):
+    urls = []
+    for kind, base, pattern in (
+            (IDENTIFIER_TYPE_LITRES, LITRES_WEB_BASE + '/book/', r'\d+'),
+            (IDENTIFIER_TYPE_LIVELIB, BASE_URL + '/book/', r'\d+(?:-[\w-]+)?'),
+            (IDENTIFIER_TYPE_FANTLAB, FANTLAB_BASE_URL + '/', FANTLAB_IDENTIFIER_PATTERN)):
+        value = as_unicode((identifiers or {}).get(kind) or '')
+        if value and re.fullmatch(pattern, value):
+            urls.append((kind, value, base + value))
+    return urls
 
 
 def id_from_url(url):
-    match = re.search(r'livelib\.ru/book/([^/?#]+)', url or '')
-    if match:
-        return (IDENTIFIER_TYPE_LIVELIB, match.group(1))
+    try:
+        parsed = urlsplit(url or '')
+        host = (parsed.hostname or '').lower()
+    except ValueError:
+        return None
+    if parsed.scheme not in ('http', 'https'):
+        return None
+    if host in ('livelib.ru', 'www.livelib.ru', 'beta.livelib.ru'):
+        match = re.fullmatch(r'/book/(\d+(?:-[\w-]+)?)/?', parsed.path)
+        if match:
+            return (IDENTIFIER_TYPE_LIVELIB, match.group(1))
+    if host in ('litres.ru', 'www.litres.ru'):
+        match = re.fullmatch(r'/(?:book|audiobook)/(?:(?:[^/]+/)?[^/]*-)?(\d+)/?', parsed.path)
+        if match:
+            return (IDENTIFIER_TYPE_LITRES, match.group(1))
+    if host in ('fantlab.ru', 'www.fantlab.ru', 'api.fantlab.ru'):
+        value = parsed.path.strip('/')
+        if FANTLAB_IDENTIFIER_PATTERN.fullmatch(value):
+            return (IDENTIFIER_TYPE_FANTLAB, value)
     return None
 
 
 def get_book_url_name(idtype, default_name):
     names = {
-        IDENTIFIER_TYPE_LITRES: 'Litres',
+        IDENTIFIER_TYPE_LITRES: 'LitRes',
         IDENTIFIER_TYPE_LIVELIB: 'LiveLib',
         IDENTIFIER_TYPE_FANTLAB: 'FantLab',
     }

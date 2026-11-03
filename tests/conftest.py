@@ -5,6 +5,7 @@ by default; tests explicitly replace it with canned responses. ``plugin_module``
 exposes the loaded module, while ``source`` creates a fresh Source/cache per test.
 """
 import importlib.util
+import importlib
 import logging
 from pathlib import Path
 from queue import Queue
@@ -36,6 +37,16 @@ def no_network(monkeypatch):
     monkeypatch.setattr(socket.socket, 'connect_ex', forbidden)
     monkeypatch.setattr(socket, 'create_connection', forbidden)
     monkeypatch.setattr(socket, 'getaddrinfo', forbidden)
+
+
+@pytest.fixture
+def clock(monkeypatch):
+    """Share controllable monotonic time across lookup and cover operations."""
+    now = [0.0]
+    for module in ('plugin_under_test', 'plugin_under_test.identify',
+                   'plugin_under_test.covers', 'plugin_under_test.providers.litres'):
+        monkeypatch.setattr(importlib.import_module(module), 'monotonic', lambda: now[0])
+    return now
 
 
 @pytest.fixture

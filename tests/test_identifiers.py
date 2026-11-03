@@ -36,7 +36,7 @@ def test_book_url(source, identifiers, expected):
     assert source.get_book_url(identifiers) == expected
 
 
-@pytest.mark.parametrize('kind, name', [('litres', 'Litres'), ('livelib', 'LiveLib'),
+@pytest.mark.parametrize('kind, name', [('litres', 'LitRes'), ('livelib', 'LiveLib'),
                                        ('fantlab', 'FantLab'), ('other', 'LiveLib Metadata')])
 def test_source_names(source, kind, name):
     assert source.get_book_url_name(kind, '123', '') == name
@@ -44,11 +44,37 @@ def test_source_names(source, kind, name):
 
 def test_id_from_url(source):
     assert source.id_from_url('https://beta.livelib.ru/book/123?x=1#abc') == ('livelib', '123')
-    assert source.id_from_url('https://fantlab.ru/work123') is None
+    assert source.id_from_url('https://fantlab.ru/work123') == ('fantlab', 'work123')
     assert source.id_from_url(None) is None
 
 
-def test_id_from_url_currently_accepts_lookalike_domain(source):
-    # Characterize existing behavior until hostname validation is fixed.
-    # TODO: Restrict URLs to supported LiveLib hostnames, then expect None here.
-    assert source.id_from_url('https://notlivelib.ru/book/123') == ('livelib', '123')
+def test_id_from_url_rejects_lookalike_domain(source):
+    assert source.id_from_url('https://notlivelib.ru/book/123') is None
+
+
+@pytest.mark.parametrize('url, expected', [
+    ('https://www.litres.ru/book/123', ('litres', '123')),
+    ('https://www.litres.ru/book/avtor/nazvanie-123/?x=1', ('litres', '123')),
+    ('https://www.litres.ru/audiobook/avtor/nazvanie-42/', ('litres', '42')),
+    ('https://www.fantlab.ru/edition42?x=1', ('fantlab', 'edition42')),
+    ('https://livelib.ru/book/123-slug', ('livelib', '123-slug')),
+    ('https://livelib.ru.evil/book/123', None),
+    ('https://evil/?url=livelib.ru/book/123', None),
+    ('ftp://livelib.ru/book/123', None),
+    ('https://[', None),
+])
+def test_parse_service_urls(source, url, expected):
+    assert source.id_from_url(url) == expected
+
+
+def test_all_book_links_and_round_trip(source):
+    ids = {'litres': '1', 'livelib': '2-slug', 'fantlab': 'edition3'}
+    links = source.get_book_urls(ids)
+    assert len(links) == 3
+    for kind, value, url in links:
+        assert source.id_from_url(url) == (kind, value)
+    assert source.get_book_url(ids) == links[0]
+    source.prefs.update(use_litres=False, use_livelib=False, use_fantlab=False)
+    assert source.get_book_urls(ids) == links
+    assert source.get_book_urls(None) == []
+    assert source.get_book_urls({'litres': '../evil', 'livelib': 'x?y', 'fantlab': '123'}) == []

@@ -23,10 +23,10 @@ class LiveLibProvider:
 
     def metadata_from_search_candidate(self, candidate):
         title = candidate.get('title') or ''
-        author = candidate.get('author') or 'Unknown'
+        authors = candidate.get('authors') or [candidate.get('author') or 'Unknown']
         if not title:
             return None
-        mi = Metadata(title, [author])
+        mi = Metadata(title, authors)
         mi.language = 'rus'
         livelib_id = livelib_id_from_url(candidate.get('url'))
         if livelib_id:
@@ -70,11 +70,16 @@ class LiveLibProvider:
         if not data:
             return None
 
-        author_data = data.get('author') or {}
-        author_name = author_data.get('name') if isinstance(author_data, dict) else author_data
+        author_data = data.get('author') or []
+        if not isinstance(author_data, list):
+            author_data = [author_data]
+        authors = []
+        for author in author_data:
+            name = author.get('name') if isinstance(author, dict) else author
+            if isinstance(name, str) and name.strip():
+                authors.append(name.strip())
         title = data.get('name') or ''
-        authors = [author_name] if author_name else ['Unknown']
-        mi = Metadata(title, authors)
+        mi = Metadata(title, authors or ['Unknown'])
         mi.language = 'rus'
 
         livelib_id = livelib_id_from_url(url) or livelib_id_from_url(data.get('url'))
@@ -134,6 +139,8 @@ class LiveLibProvider:
         return mi
 
     def search_page(self, url, title, authors, timeout, log=None):
+        if log is not None:
+            log.info('LiveLib search: ' + url)
         try:
             raw = self.transport.fetch_livelib_text(url, timeout)
         except Exception as err:

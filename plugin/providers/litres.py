@@ -8,6 +8,18 @@ from calibre import as_unicode
 from calibre.ebooks.metadata.book.base import Metadata
 from urllib.parse import quote
 from urllib.parse import urlencode
+from time import monotonic
+
+
+def is_audio(item):
+    url = (item.get('url') or '').lower()
+    return str(item.get('art_type')) in ('4', '10') or any(
+        path in url for path in ('/audiobook/', '/podcast/'))
+
+
+def edition_key(candidate):
+    return (norm(candidate['title']),
+            tuple(sorted(norm(author) for author in candidate['authors'])))
 
 
 class LitresProvider:
@@ -31,6 +43,7 @@ class LitresProvider:
         return cover_url
 
     def search_litres(self, log, query_title, query_authors, timeout, abort=None):
+        deadline = monotonic() + timeout
         queries = []
         if query_title:
             queries.append(' '.join([query_title] + list(query_authors or [])).strip())
@@ -38,7 +51,8 @@ class LitresProvider:
         candidates = []
         seen = set()
         for query in [q for q in queries if q]:
-            if abort is not None and abort.is_set():
+            remaining = deadline - monotonic()
+            if remaining <= 0 or (abort is not None and abort.is_set()):
                 break
             params = [
                 ('q', query), ('limit', '10'), ('offset', '0'),
@@ -50,7 +64,7 @@ class LitresProvider:
             url = LITRES_API_BASE + '/search?' + urlencode(params)
             log.info('LitRes search: ' + url)
             try:
-                payload = self.transport.fetch_litres_json(url, timeout).get('payload') or {}
+                payload = self.transport.fetch_litres_json(url, remaining).get('payload') or {}
             except Exception as err:
                 log.exception('LitRes search failed: %s' % as_unicode(err))
                 continue
@@ -70,8 +84,7 @@ class LitresProvider:
                 if not title_match_enough(query_title, item.get('title') or ''):
                     continue
                 score = score_match(query_title, query_authors, item.get('title') or '', author_text)
-                item_url = item.get('url') or ''
-                if item.get('art_type') in (4, 10) or '/audiobook/' in item_url or '/podcast/' in item_url:
+                if is_audio(item):
                     score -= 20
                 if score < 55:
                     continue
@@ -87,6 +100,15 @@ class LitresProvider:
                     'cover_url': cover_url,
                     'raw': item,
                 })
+        # Filter only after both searches: the text edition can arrive later.
+        # Unrelated accepted books must not suppress an audio-only match.
+        non_audio_keys = {edition_key(c) for c in candidates if not is_audio(c['raw'])}
+        preferred = [c for c in candidates
+                     if not is_audio(c['raw']) or edition_key(c) not in non_audio_keys]
+        if len(preferred) != len(candidates):
+            log.info('LitRes: skipped %d audio candidate(s) with matching non-audio editions',
+                     len(candidates) - len(preferred))
+        candidates = preferred
         candidates.sort(key=lambda row: row['score'], reverse=True)
         return candidates
 

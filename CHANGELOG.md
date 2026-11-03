@@ -1,5 +1,25 @@
 # Changelog
 
+## v0.5.1 - Unreleased
+
+- Fix direct LiveLib lookups crashing on books with multiple JSON-LD authors; preserve all coauthors in page metadata and direct-lookup fallback results.
+
+## v0.5.0 - Unreleased
+- Add a setting for missing LiveLib personal ratings: use the public book rating from enabled sources or return no rating (default). Personal ratings always take priority; the setting also covers unavailable profiles and lookup timeouts.
+- Prefer non-audio LitRes editions with matching normalized titles and authors before fetching and merging results. Retain audio-only matches and explicit audio IDs; no additional setting is needed.
+- Fix ratings passed to Calibre's metadata download API: return 0..5 values, since Calibre converts these to its internal 0..10 scale when applying a result. Previously personal ratings such as 4/5 could display as five stars.
+- Add an optional LiveLib username: read personal ratings and reading dates from the public read shelf. Use the personal rating in Calibre and append both values to LiveLib edition details. Preserve date precision; handle pagination, short-lived caching, cancellation, and unavailable profiles. Cover-only lookups skip reading history.
+
+## v0.4.0 - Unreleased
+
+- Reload the plugin's submodules when replacing an installed ZIP so an update from 0.3.3 does not mix old and new code in a running Calibre.
+- Automatically collect LitRes, LiveLib, and FantLab IDs for matching results, including lookups that already have a service ID.
+- Fill only missing metadata fields; preserve populated comments, ratings, tags, and existing identifiers. Skip ambiguous additional IDs.
+- Add three source switches through Calibre's native metadata source configuration; disabled sources are excluded from metadata and cover requests.
+- Return all service links through `get_book_urls` and recognize URLs from all three services.
+- Support direct FantLab work/edition lookup and separate cover cache entries by source.
+- Preserve the original provider scoring and acceptance rules.
+
 ## v0.3.4
 
 - Fix LiveLib cover downloads crashing when JSON-LD `image` is an ImageObject instead of a URL string.

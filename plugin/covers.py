@@ -1,13 +1,12 @@
 from .constants import BASE_URL
 from .constants import BETA_BASE_URL
-from .constants import IDENTIFIER_TYPE_FANTLAB
-from .constants import IDENTIFIER_TYPE_LITRES
-from .constants import IDENTIFIER_TYPE_LIVELIB
 from calibre import as_unicode
 from queue import Empty
 from queue import Queue
 from urllib.parse import quote
 import re
+from .config import SOURCE_NAMES
+from time import monotonic
 
 
 def livelib_original_cover_url(url):
@@ -34,50 +33,65 @@ def livelib_cover_candidates(url):
 class CoverService:
     """Per-instance cache access and collection, with an injected identify callback."""
 
-    def __init__(self, cached_cover, identify, litres, livelib, fantlab):
+    def __init__(self, cached_cover, identify, litres, livelib, fantlab, enabled_sources=None):
         self.cached_cover = cached_cover
         self.identify = identify
         self.litres = litres
         self.livelib = livelib
         self.fantlab = fantlab
+        self.enabled_sources = enabled_sources or (lambda: frozenset(SOURCE_NAMES))
 
     def get_cached_cover_url(self, identifiers):
-        litres_id = (identifiers or {}).get(IDENTIFIER_TYPE_LITRES)
-        if litres_id:
-            return self.cached_cover('litres:' + litres_id)
-        livelib_id = (identifiers or {}).get(IDENTIFIER_TYPE_LIVELIB)
-        if livelib_id:
-            return self.cached_cover('livelib:' + livelib_id)
-        fantlab_id = (identifiers or {}).get(IDENTIFIER_TYPE_FANTLAB)
-        if fantlab_id:
-            return self.cached_cover('fantlab:' + fantlab_id)
-        return None
+        return next(iter(self.get_cached_cover_urls(identifiers)), None)
 
-    def find_cover_url_direct(self, log, title=None, authors=None, timeout=30, abort=None):
-        if abort is not None and abort.is_set():
+    def get_cached_cover_urls(self, identifiers, enabled=None):
+        enabled = self.enabled_sources() if enabled is None else enabled
+        urls = []
+        for kind in SOURCE_NAMES:
+            identifier = (identifiers or {}).get(kind)
+            if kind in enabled and identifier:
+                url = self.cached_cover(kind, identifier)
+                if url and url not in urls:
+                    urls.append(url)
+        return urls
+
+    def find_cover_url_direct(self, log, title=None, authors=None, timeout=30, enabled=None, abort=None):
+        enabled = self.enabled_sources() if enabled is None else enabled
+        deadline = monotonic() + timeout
+
+        def stopped():
+            return (abort is not None and abort.is_set()) or monotonic() >= deadline
+
+        if stopped():
             return None
-        for candidate in self.litres.search_litres(log, title, authors, timeout, abort=abort):
-            if candidate.get('cover_url'):
-                return candidate['cover_url']
+        if 'litres' in enabled:
+            try:
+                for candidate in self.litres.search_litres(log, title, authors, max(0.001, deadline - monotonic()), abort=abort):
+                    if candidate.get('cover_url'):
+                        return candidate['cover_url']
+            except Exception as err:
+                log.exception('Direct LitRes cover search failed: %s' % as_unicode(err))
         query = ' '.join([title or ''] + list(authors or [])).strip()
-        if query:
+        if query and 'livelib' in enabled and not stopped():
             for url in (
                     BETA_BASE_URL + '/search?q=' + quote(query),
                     BASE_URL + '/find/' + quote(query),
             ):
-                if abort is not None and abort.is_set():
+                if stopped():
                     return None
                 try:
-                    for candidate in self.livelib.search_page(url, title, authors, timeout):
+                    for candidate in self.livelib.search_page(url, title, authors, max(0.001, deadline - monotonic())):
                         if candidate.get('cover_url'):
                             return candidate['cover_url']
                 except Exception as err:
                     log.exception('Direct LiveLib cover search failed: %s' % as_unicode(err))
-        if abort is not None and abort.is_set():
-            return None
-        for candidate in self.fantlab.search_fantlab(log, title, authors, timeout):
-            if candidate.get('cover_url'):
-                return candidate['cover_url']
+        if 'fantlab' in enabled and not stopped():
+            try:
+                for candidate in self.fantlab.search_fantlab(log, title, authors, max(0.001, deadline - monotonic())):
+                    if candidate.get('cover_url'):
+                        return candidate['cover_url']
+            except Exception as err:
+                log.exception('Direct FantLab cover search failed: %s' % as_unicode(err))
         return None
 
     def find_all_cover_urls(self, log, abort, title, authors, identifiers, timeout):
@@ -86,18 +100,22 @@ class CoverService:
             return []
         urls = []
         seen = set()
+        enabled = self.enabled_sources()
+        deadline = monotonic() + timeout
+        if not enabled or abort.is_set():
+            return []
 
         def add(url):
             if url and url not in seen:
                 seen.add(url)
                 urls.append(url)
 
-        add(self.get_cached_cover_url(identifiers))
-        direct_id = any((identifiers or {}).get(key) for key in (IDENTIFIER_TYPE_LITRES, IDENTIFIER_TYPE_LIVELIB))
-        if title or authors or (direct_id and not urls):
+        for url in self.get_cached_cover_urls(identifiers, enabled):
+            add(url)
+        if title or authors or any((identifiers or {}).get(kind) for kind in enabled):
             q = Queue()
             self.identify(log, q, abort, title=title, authors=authors,
-                          identifiers=identifiers, timeout=timeout)
+                          identifiers=identifiers, timeout=timeout, enabled=enabled)
             # Drain the whole queue so covers from every matched source (LitRes,
             # LiveLib, FantLab) are gathered, not just the single top-scoring hit.
             while True:
@@ -105,10 +123,13 @@ class CoverService:
                     mi = q.get_nowait()
                 except Empty:
                     break
-                add(self.get_cached_cover_url(mi.identifiers))
-        if not urls and (title or authors) and not abort.is_set():
-            add(self.find_cover_url_direct(log, title=title, authors=authors, timeout=timeout, abort=abort))
-        return urls
+                for url in self.get_cached_cover_urls(mi.identifiers, enabled):
+                    add(url)
+        remaining = deadline - monotonic()
+        if not urls and (title or authors) and remaining > 0 and not abort.is_set():
+            add(self.find_cover_url_direct(log, title=title, authors=authors, timeout=remaining,
+                                           enabled=enabled, abort=abort))
+        return [] if abort.is_set() else urls
 
 
 def expand_cover_urls(urls):

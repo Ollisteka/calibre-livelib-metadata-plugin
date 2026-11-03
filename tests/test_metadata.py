@@ -1,6 +1,7 @@
 from plugin_under_test.providers.livelib import formatting
 from plugin_under_test.providers.livelib import parsers
 
+import json
 import pytest
 
 
@@ -99,6 +100,29 @@ def test_livelib_missing_fields(source):
     mi = source.livelib.metadata_from_search_candidate({'title': 'Книга', 'url': '/book/1'})
     assert mi.authors == ['Unknown']
     assert mi.comments is None
+
+
+@pytest.mark.parametrize('author_data, expected', [
+    ({'name': 'Автор'}, ['Автор']),
+    ('Автор', ['Автор']),
+    ([{'name': 'Джон Рэйти'}, {'name': 'Эрик Хагерман'}], ['Джон Рэйти', 'Эрик Хагерман']),
+    (['Джон Рэйти', 'Эрик Хагерман'], ['Джон Рэйти', 'Эрик Хагерман']),
+    ([None, {}, 42, {'name': ['bad']}, ' ', {'name': ' Автор '}], ['Автор']),
+    ([], ['Unknown']),
+])
+def test_livelib_page_authors(source, monkeypatch, author_data, expected):
+    from plugin_under_test.providers.livelib import provider
+    monkeypatch.setattr(provider, 'check_isbn', lambda value: None)
+    raw = '<script type="application/ld+json">%s</script>' % json.dumps({
+        '@type': 'Book', 'name': 'Книга', 'author': author_data})
+    mi = source.livelib.metadata_from_page(raw, 'https://beta.livelib.ru/book/1002467643')
+    assert mi.authors == expected
+
+
+def test_livelib_candidate_keeps_all_direct_authors(source):
+    mi = source.livelib.metadata_from_search_candidate({
+        'title': 'Книга', 'authors': ['Джон Рэйти', 'Эрик Хагерман'], 'author': 'Джон Рэйти'})
+    assert mi.authors == ['Джон Рэйти', 'Эрик Хагерман']
 
 
 @pytest.mark.parametrize('rating, expected', [('8.5', 8.5), ('bad', None), (None, None)],
