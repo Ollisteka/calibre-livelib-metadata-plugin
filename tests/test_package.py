@@ -12,6 +12,22 @@ builder = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(builder)
 
 
+def test_reading_archive_contains_shared_parser(tmp_path):
+    import shutil
+    shutil.copytree(ROOT / 'reading_plugin', tmp_path / 'reading_plugin')
+    target = tmp_path / 'plugin/providers/livelib'
+    target.mkdir(parents=True)
+    shutil.copyfile(ROOT / 'plugin/providers/livelib/dates.py', target / 'dates.py')
+    archive = builder.build_reading_plugin(tmp_path)
+    with ZipFile(archive) as zipped:
+        assert set(zipped.namelist()) == {
+            '__init__.py', 'ui.py', 'sync.py', 'dates.py',
+            'images/reading-dates.png',
+            'plugin-import-name-livelib_reading_dates.txt'}
+        assert zipped.read('dates.py') == (target / 'dates.py').read_bytes()
+        assert zipped.read('images/reading-dates.png') == (ROOT / 'reading_plugin/images/reading-dates.png').read_bytes()
+
+
 @pytest.mark.parametrize('cached_submodules', [False, True], ids=['fresh-import', 'upgrade-with-cached-modules'])
 def test_archive_content_and_import(tmp_path, cached_submodules):
     import shutil

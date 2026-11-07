@@ -28,12 +28,12 @@ def main(path, previous_path=None):
             del sys.modules[name]
     if previous_path:
         previous = loader.load(previous_path)(None)
-        assert previous.version < (0, 5, 1)
+        assert previous.version < (0, 6, 0)
         assert 'calibre_plugins.livelib_metadata.identifiers' in sys.modules
         # Keep the previous modules loaded, as Preferences -> Load plugin from
         # file does when replacing an installed plugin in a running Calibre.
     plugin = loader.load(path)(None)
-    assert plugin.version == (0, 5, 1)
+    assert plugin.version == (0, 6, 0)
     assert type(plugin).__module__ == 'calibre_plugins.livelib_metadata'
     # Use an isolated CALIBRE_CONFIG_DIRECTORY when running this script.
     # Exercise Calibre's real generated widget and JSONConfig persistence.

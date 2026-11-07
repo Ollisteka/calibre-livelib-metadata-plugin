@@ -1,6 +1,14 @@
 # Changelog
 
-## v0.5.1 - Unreleased
+## v0.6.0 - Unreleased
+
+- Read precise calendar dates from the new public LiveLib shelf, preserving the day in comments and the companion date column. Keep month/year precision when that is all LiveLib provides; use legacy shelf headings only when the new source is unavailable. Log each requested book's date and source.
+- Added optional **LiveLib Reading Dates** companion command for selected books, with a
+  library-specific date-column picker and opt-in overwrite. Partial dates use the first
+  day/month; cancellation and missing values do not change existing dates. Rating settings
+  remain in the metadata source.
+
+## v0.5.1
 
 - Fix direct LiveLib lookups crashing on books with multiple JSON-LD authors; preserve all coauthors in page metadata and direct-lookup fallback results.
 
