@@ -3,11 +3,12 @@ name: Release
 on:
   push:
     tags:
-      - "v*"
+      - "metadata-v*"
+      - "reading-dates-v*"
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to create and publish (e.g. v0.3.3)"
+        description: "Existing tag: metadata-v0.6.0 or reading-dates-v0.1.0"
         required: true
 
 permissions:
@@ -19,15 +20,32 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Validate tag and select plugin
+        id: release
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: python scripts/prepare_release.py
+
+      - name: Run offline tests
+        run: |
+          python -m pip install -r requirements-dev.txt
+          python -m pytest
 
       - name: Build plugin zip
-        run: ./scripts/build-plugin.sh
+        run: python scripts/build_plugin.py --plugin "${{ steps.release.outputs.plugin }}"
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ inputs.tag || github.ref_name }}
-          files: |
-            dist/LiveLib.Metadata.zip
-            dist/LiveLib.ReadingDates.zip
-          body_path: RELEASE_NOTES.md
+          files: ${{ steps.release.outputs.archive }}
+          body_path: ${{ steps.release.outputs.notes }}
+          fail_on_unmatched_files: true
+          make_latest: false

@@ -229,9 +229,25 @@ Remove-Item Env:CALIBRE_CONFIG_DIRECTORY, Env:QT_QPA_PLATFORM
 
 ## Releasing
 
-Releases are automated. Pushing a tag like `v0.3.3` triggers the GitHub Actions workflow
-(`.github/workflows/release.yml`), which builds a fresh plugin zip and publishes a GitHub release
-with `RELEASE_NOTES.md` as the body.
+Plugins are released independently:
+
+| Tag | Version file | Release notes | Asset |
+| --- | --- | --- | --- |
+| `metadata-v0.6.0` | `plugin/__init__.py` | `RELEASE_NOTES.md` | `LiveLib.Metadata.zip` |
+| `reading-dates-v0.1.0` | `reading_plugin/__init__.py` | `RELEASE_NOTES_READING_DATES.md` | `LiveLib.ReadingDates.zip` |
+
+Update the selected plugin's version and release notes, commit and push the changes,
+then create and push its tag (for example, `git tag metadata-v0.6.0` followed by
+`git push origin metadata-v0.6.0`). Use a new version/tag for each subsequent release.
+The workflow validates the tag against the version, runs the offline tests, builds
+only the selected ZIP and publishes it with the corresponding notes. Old `v*` tags
+no longer trigger releases. Manual runs require an existing tag and check out that tag.
+Independent releases are not marked as the repository-wide Latest release; use the
+releases list to find the desired plugin.
+
+For a local single-plugin build, use `python scripts/build_plugin.py --plugin metadata`
+or `python scripts/build_plugin.py --plugin reading-dates`. Without arguments, both are built.
+Reading Dates still requires a compatible installed Metadata plugin.
 
 ---
 

@@ -31,5 +31,11 @@ def build_reading_plugin(root=None):
 
 
 if __name__ == '__main__':
-    print(build_plugin())
-    print(build_reading_plugin())
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--plugin', choices=['all', 'metadata', 'reading-dates'], default='all')
+    args = parser.parse_args()
+    if args.plugin in ('all', 'metadata'):
+        print(build_plugin())
+    if args.plugin in ('all', 'reading-dates'):
+        print(build_reading_plugin())
