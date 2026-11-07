@@ -80,6 +80,50 @@ need to download metadata again to find your reading details.
 
 Settings apply to all libraries in your Calibre profile.
 
+The plugin takes reading dates from your public **«Прочитал»** shelf on LiveLib.
+If LiveLib shows the exact day, you get a date such as **02.11.2026**. If it only shows
+a month or year, that is what appears in the book's comments. The date you added a book
+to the shelf is never treated as the date you read it.
+If the current shelf page is unavailable, the plugin tries the older page, which may
+only show the month and year. For rereads, it uses the most recent shelf entry.
+
+### Save read dates in a custom column
+
+To keep reading dates in their own column, install **LiveLib.ReadingDates.zip** through
+**Preferences → Plugins → Load plugin from file**, then restart Calibre.
+You also need **LiveLib Metadata 0.5.0 or newer**. Dates are loaded with a separate toolbar
+button because Calibre's regular metadata download cannot fill custom columns.
+
+1. In **Preferences → Add your own columns**, create a column with type **Date**, if needed.
+2. In **Preferences → Toolbars & menus**, add **Загрузить даты прочтения LiveLib** to the main toolbar.
+3. Select your books and click the new button. Choose the column to fill and click **Загрузить даты**.
+
+Before you start, enter your LiveLib username in the LiveLib Metadata settings and make sure
+LiveLib is enabled there. Each book needs a LiveLib ID in its Calibre metadata so the plugin
+can find the right edition. This command does not search by book title.
+
+Your column choice and the option to replace existing dates are remembered for each library.
+Dates you already have are kept unless you check **Обновлять уже заполненные даты**.
+If a date cannot be found or understood, the existing value stays unchanged.
+Your ratings and comments stay unchanged too.
+
+A Date column needs a day, month, and year. If LiveLib only gives **Ноябрь 2026 г.**, the
+plugin saves **01.11.2026**. If it only gives **2026**, it saves **01.01.2026**.
+Exact dates are saved as they are. For rereads, the most recent shelf entry is used.
+You can still see the date as LiveLib wrote it in the comments loaded by LiveLib Metadata.
+
+You can keep using Calibre while dates load. Each attempt runs for up to two minutes.
+If you cancel, no dates are changed. If some books were not reached, run the command again
+within five minutes to continue where it left off. When it finishes, you will see how many
+books were updated or skipped, with a log you can check for details.
+To replace dates previously saved as the first of the month with exact dates now available
+on LiveLib, check **Обновлять уже заполненные даты** and load the dates again.
+
+For developers: `python scripts/build_plugin.py` builds both plugin ZIP files.
+To test the reading-date plugin in Calibre, first set `CALIBRE_CONFIG_DIRECTORY` to a separate
+test profile, then run `calibre-debug -e scripts/check_reading_plugin.py`.
+The check uses a temporary library and sample data instead of contacting LiveLib.
+
 ---
 
 ## Installation
@@ -185,9 +229,25 @@ Remove-Item Env:CALIBRE_CONFIG_DIRECTORY, Env:QT_QPA_PLATFORM
 
 ## Releasing
 
-Releases are automated. Pushing a tag like `v0.3.3` triggers the GitHub Actions workflow
-(`.github/workflows/release.yml`), which builds a fresh plugin zip and publishes a GitHub release
-with `RELEASE_NOTES.md` as the body.
+Plugins are released independently:
+
+| Tag | Version file | Release notes | Asset |
+| --- | --- | --- | --- |
+| `metadata-v0.6.0` | `plugin/__init__.py` | `RELEASE_NOTES.md` | `LiveLib.Metadata.zip` |
+| `reading-dates-v0.1.0` | `reading_plugin/__init__.py` | `RELEASE_NOTES_READING_DATES.md` | `LiveLib.ReadingDates.zip` |
+
+Update the selected plugin's version and release notes, commit and push the changes,
+then create and push its tag (for example, `git tag metadata-v0.6.0` followed by
+`git push origin metadata-v0.6.0`). Use a new version/tag for each subsequent release.
+The workflow validates the tag against the version, runs the offline tests, builds
+only the selected ZIP and publishes it with the corresponding notes. Old `v*` tags
+no longer trigger releases. Manual runs require an existing tag and check out that tag.
+Independent releases are not marked as the repository-wide Latest release; use the
+releases list to find the desired plugin.
+
+For a local single-plugin build, use `python scripts/build_plugin.py --plugin metadata`
+or `python scripts/build_plugin.py --plugin reading-dates`. Without arguments, both are built.
+Reading Dates still requires a compatible installed Metadata plugin.
 
 ---
 

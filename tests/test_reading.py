@@ -28,6 +28,13 @@ def page(content, last=True):
 HEADING = '<div class="brow-h2"><h2>Октябрь 2026 г.</h2></div>'
 
 
+@pytest.fixture(autouse=True)
+def legacy_shelf_transport(monkeypatch):
+    """These tests exercise the fallback used when the new public shelf is absent."""
+    monkeypatch.setattr(transport.Transport, 'fetch_livelib_text',
+                        Mock(side_effect=OSError('public shelf unavailable')))
+
+
 def test_parse_uses_personal_rating_and_preserves_date_precision():
     entries, date = reading.parse_read_page(HEADING + book())
     assert entries == {'22': {'rating': 4.5, 'read_date': 'Октябрь 2026 г.'}}
@@ -278,3 +285,37 @@ def test_post_form_transport(source, monkeypatch):
     monkeypatch.setattr(transport, 'urlopen', open_request)
     assert source.transport.post_form_json('https://www.livelib.ru/reader/test/read/listview/biglist',
                                           {'page_no': 2, 'per_page': 100}, 7) == page('')
+
+
+@pytest.mark.parametrize('partial', [False, True])
+def test_lookup_reports_error_and_retains_partial_dates(source, monkeypatch, log, abort, partial):
+    responses = ([page(HEADING + book(), False)] if partial else []) + [OSError('offline')]
+    monkeypatch.setattr(source.transport, 'post_form_json', Mock(side_effect=responses))
+    found = source.reading.lookup('reader', ['22', '33'], log, abort, 120)
+    assert source.reading.status == 'error'
+    assert source.reading.reason == 'offline'
+    assert ('22' in found) == partial
+
+
+def test_request_timeout_is_shorter_than_total_budget(source, monkeypatch, log, abort):
+    post = Mock(return_value=page(book()))
+    monkeypatch.setattr(source.transport, 'post_form_json', post)
+    source.reading.lookup('reader', ['22'], log, abort, 120)
+    assert 0 < post.call_args.args[2] <= 10
+
+
+def test_cancel_during_request_discards_results_and_allows_retry(source, monkeypatch, log, abort):
+    def delayed(*args):
+        abort.set()
+        return page(HEADING + book())
+    monkeypatch.setattr(source.transport, 'post_form_json', delayed)
+    assert source.reading.lookup('reader', ['22'], log, abort, 120) == {}
+    abort.clear()
+    assert '22' in source.reading.lookup('reader', ['22'], log, abort, 120)
+
+
+def test_companion_history_has_independent_transport_and_cache(source):
+    history = source.create_reading_history()
+    assert history is not source.reading
+    assert history.transport is not source.transport
+    assert history._entries is not source.reading._entries

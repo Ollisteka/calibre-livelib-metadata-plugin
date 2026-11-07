@@ -16,5 +16,26 @@ def build_plugin(root=None):
     return output
 
 
+def build_reading_plugin(root=None):
+    root = Path(root) if root is not None else Path(__file__).resolve().parents[1]
+    output = root / 'dist' / 'LiveLib.ReadingDates.zip'
+    output.parent.mkdir(parents=True, exist_ok=True)
+    with ZipFile(output, 'w', ZIP_DEFLATED) as archive:
+        for path in sorted((root / 'reading_plugin').glob('*.py')):
+            archive.write(path, path.name)
+        for path in sorted((root / 'reading_plugin/images').glob('*.png')):
+            archive.write(path, 'images/' + path.name)
+        archive.writestr('plugin-import-name-livelib_reading_dates.txt', '')
+        archive.write(root / 'plugin/providers/livelib/dates.py', 'dates.py')
+    return output
+
+
 if __name__ == '__main__':
-    print(build_plugin())
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--plugin', choices=['all', 'metadata', 'reading-dates'], default='all')
+    args = parser.parse_args()
+    if args.plugin in ('all', 'metadata'):
+        print(build_plugin())
+    if args.plugin in ('all', 'reading-dates'):
+        print(build_reading_plugin())
